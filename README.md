@@ -26,13 +26,19 @@ List of flash cards for user to see. Of course some of them can be marked as lea
 This database is not searchable except for full text search
 
 Should be few fields.
-1. Text - plain Japanese text
-2. Structure - this is parsed structure of the sentence, see next section for further explanation
+1. Sentence ID
+2. Queue info (one or two fields)
 3. Shown times
 4. Learned - if user marked this sentence as learned.
 5. Main words - list of words for which this sentence was picked.
 6. Quiz succeed - after marking as learned, flash card should be shown one more time but now with quiz answering which reading and meaning the main word has.
-7. Translation - full translation of the sentence.
+
+### Sentence storage
+
+Should be few fields.
+1. Text - plain Japanese text 
+2. Structure - this is parsed structure of the sentence, see next section for further explanation
+3. Translation - full translation of the sentence.
 
 #### Sentence structure
 
@@ -109,9 +115,28 @@ So, for example, all highes priority items were removed from queue, and it is no
 We moved to medium priority queue, but marked item from there as hard (goes to the highest priority),
 but we still continue with medium queue until previously added items are checked once.
 
+Pressing on the card itself should flip it to show translation and furigana for all the words, except with hidden furigana.
+
+Back side of cards is not flipped back on click. Instead there are extra actions available.
+
+Pressing on word should open 4 directions menu:
+1. Right - mark word as known
+2. Left - mark word for learning
+3. Down - hide furigana
+4. Up - open dictionary (TODO)
+
 ## Sentences source
 
 In general sentence can be imported in two variants - plain text or already structured.
 
 I have python script for making similar kind of flash cards for anki.
 
+### Adding word to learn
+
+All sentences in the database should be calculated how many unknown words this sentence have, and app should choose the one that have the highest amount of known words (in percentage).
+Best case scenario, only word to learn is the unknown one.
+
+# Notes
+
+I also think to define base level, for example all words of level N4 or N5 should be marked as known by default.
+Yeah, I know that there is no clear separation for JLPT, but there are databases that can provide this separation approximately.  
