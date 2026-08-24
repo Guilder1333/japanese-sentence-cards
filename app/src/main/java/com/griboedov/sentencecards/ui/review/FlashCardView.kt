@@ -18,8 +18,10 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
@@ -36,6 +39,8 @@ import com.griboedov.sentencecards.data.db.SentenceToken
 import com.griboedov.sentencecards.data.db.WordEntity
 import com.griboedov.sentencecards.ui.theme.FuriganaStyle
 import com.griboedov.sentencecards.ui.theme.JapaneseSentenceStyle
+import com.griboedov.sentencecards.ui.theme.wordStatusColor
+import kotlinx.coroutines.delay
 
 /**
  * The normal (non-quiz) flash card: front shows plain Japanese text plus forced furigana only;
@@ -62,6 +67,15 @@ fun FlashCardView(
     var flickWord by remember(card.id) { mutableStateOf<WordEntity?>(null) }
     var flickDirection by remember(card.id) { mutableStateOf<WordDirection?>(null) }
 
+    // Translation tooltip: shown on a plain tap, auto-dismisses after a couple of seconds.
+    var tooltipWord by remember(card.id) { mutableStateOf<WordEntity?>(null) }
+    LaunchedEffect(tooltipWord) {
+        if (tooltipWord != null) {
+            delay(2_000)
+            tooltipWord = null
+        }
+    }
+
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -86,8 +100,8 @@ fun FlashCardView(
                     CardBack(
                         card = card,
                         words = words,
-                        onWordTap = onWordTap,
-                        onFlickStart = { flickWord = it; flickDirection = null },
+                        onWordTap = { word -> onWordTap(word.id); tooltipWord = word },
+                        onFlickStart = { flickWord = it; flickDirection = null; tooltipWord = null },
                         onFlickDirectionChange = { flickDirection = it },
                         onFlickEnd = { commit ->
                             val word = flickWord
@@ -100,6 +114,9 @@ fun FlashCardView(
                         },
                     )
                     flickWord?.let { word -> FlickMenu(word = word, highlighted = flickDirection) }
+                    if (flickWord == null) {
+                        tooltipWord?.let { word -> TranslationTooltip(word = word) }
+                    }
                 }
             }
         }
@@ -116,7 +133,12 @@ private fun CardFront(card: SentenceEntity, words: Map<Long, WordEntity>) {
         for (token in card.structure) {
             val word = token.id?.let { words[it] }
             val showFurigana = word != null && word.forceFurigana && !word.hideFurigana
-            TokenText(token = token, furigana = if (showFurigana) token.furigana else null)
+            val isMainWord = token.id != null && token.id in card.mainWordIds
+            TokenText(
+                token = token,
+                furigana = if (showFurigana) token.furigana else null,
+                color = wordStatusColor(word, isMainWord),
+            )
         }
     }
 }
@@ -128,7 +150,7 @@ private val FlickThreshold = 24.dp
 private fun CardBack(
     card: SentenceEntity,
     words: Map<Long, WordEntity>,
-    onWordTap: (Long) -> Unit,
+    onWordTap: (WordEntity) -> Unit,
     onFlickStart: (WordEntity) -> Unit,
     onFlickDirectionChange: (WordDirection?) -> Unit,
     onFlickEnd: (committed: Boolean) -> Unit,
@@ -138,12 +160,13 @@ private fun CardBack(
             for (token in card.structure) {
                 val word = token.id?.let { words[it] }
                 val showFurigana = word == null || !word.hideFurigana
+                val isMainWord = token.id != null && token.id in card.mainWordIds
                 val tokenModifier = if (word != null) {
                     Modifier
                         // Plain tap: translation tooltip. A separate pointerInput block, since
                         // detectDragGesturesAfterLongPress below leaves short taps untouched.
                         .pointerInput(word.id) {
-                            detectTapGestures(onTap = { onWordTap(word.id) })
+                            detectTapGestures(onTap = { onWordTap(word) })
                         }
                         // Press and hold, then drag like a flick keyboard: direction is
                         // recomputed from the total drag offset on every move, and committed
@@ -169,7 +192,11 @@ private fun CardBack(
                     Modifier
                 }
                 Box(modifier = tokenModifier) {
-                    TokenText(token = token, furigana = if (showFurigana) token.furigana else null)
+                    TokenText(
+                        token = token,
+                        furigana = if (showFurigana) token.furigana else null,
+                        color = wordStatusColor(word, isMainWord),
+                    )
                 }
             }
         }
@@ -182,15 +209,35 @@ private fun CardBack(
 }
 
 @Composable
-private fun TokenText(token: SentenceToken, furigana: String?) {
+private fun TranslationTooltip(word: WordEntity) {
+    Surface(
+        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 6.dp,
+        shadowElevation = 6.dp,
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            word.furigana?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+            Text(word.word, style = MaterialTheme.typography.titleMedium)
+            Text(word.translation, style = MaterialTheme.typography.bodyMedium)
+        }
+    }
+}
+
+@Composable
+private fun TokenText(token: SentenceToken, furigana: String?, color: Color? = null) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 2.dp)) {
         Text(
             text = furigana ?: "",
             style = FuriganaStyle,
+            color = color ?: Color.Unspecified,
         )
         Text(
             text = token.word,
             style = JapaneseSentenceStyle,
+            color = color ?: Color.Unspecified,
         )
     }
 }

@@ -37,6 +37,7 @@ import com.griboedov.sentencecards.SentenceCardsApp
 import com.griboedov.sentencecards.data.db.WordEntity
 import com.griboedov.sentencecards.data.knowledge.KnowledgeLevel
 import com.griboedov.sentencecards.data.knowledge.knowledgeLevel
+import com.griboedov.sentencecards.ui.theme.wordStatusColor
 import com.griboedov.sentencecards.ui.theme.BacklogPriority
 import com.griboedov.sentencecards.ui.theme.EasyPriority
 import com.griboedov.sentencecards.ui.theme.HighestPriority
@@ -106,7 +107,11 @@ private fun WordRow(
                     word.furigana?.let {
                         Text(it, style = MaterialTheme.typography.labelSmall)
                     }
-                    Text(word.word, style = MaterialTheme.typography.headlineSmall)
+                    Text(
+                        word.word,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = wordStatusColor(word) ?: Color.Unspecified,
+                    )
                     Text(word.translation, style = MaterialTheme.typography.bodyMedium)
                 }
                 KnowledgeBadge(word.knowledgeLevel())

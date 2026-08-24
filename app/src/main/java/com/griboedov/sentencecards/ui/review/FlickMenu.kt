@@ -7,10 +7,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -19,10 +16,15 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.griboedov.sentencecards.data.db.WordEntity
+import com.griboedov.sentencecards.ui.theme.EasyPriority
+import com.griboedov.sentencecards.ui.theme.HighestPriority
 import kotlin.math.atan2
 
 /**
@@ -31,6 +33,11 @@ import kotlin.math.atan2
  * furigana, up: dictionary". It has no click handlers of its own - [FlashCardView] drives it by
  * press-and-hold-then-drag (see `detectDragGesturesAfterLongPress` there): [highlighted] reflects
  * whichever direction the current drag points to, and lifting the finger commits it.
+ *
+ * Each direction gets a glyph that hints at its meaning rather than a generic arrow: 知 ("chi" -
+ * wisdom/knowledge) in green for "mark known", 不 ("fu" - un-/non-, i.e. not yet known) in red for
+ * "mark to learn", ふ (hiragana "fu", as in furigana) for "hide furigana", and a book for the
+ * dictionary lookup.
  */
 @Composable
 fun FlickMenu(word: WordEntity, highlighted: WordDirection?) {
@@ -40,10 +47,30 @@ fun FlickMenu(word: WordEntity, highlighted: WordDirection?) {
                 Text(word.word, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
                 word.furigana?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
-            DirectionIcon(Icons.AutoMirrored.Filled.MenuBook, "Dictionary (TODO)", Alignment.TopCenter, highlighted == WordDirection.UP)
-            DirectionIcon(Icons.Filled.KeyboardArrowDown, "Hide furigana", Alignment.BottomCenter, highlighted == WordDirection.DOWN)
-            DirectionIcon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, "Mark to learn", Alignment.CenterStart, highlighted == WordDirection.LEFT)
-            DirectionIcon(Icons.AutoMirrored.Filled.KeyboardArrowRight, "Mark known", Alignment.CenterEnd, highlighted == WordDirection.RIGHT)
+            DirectionSlot(
+                alignment = Alignment.TopCenter,
+                active = highlighted == WordDirection.UP,
+                activeColor = MaterialTheme.colorScheme.secondary,
+                contentDescription = "Dictionary (TODO)",
+            ) { tint -> Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = tint) }
+            DirectionSlot(
+                alignment = Alignment.BottomCenter,
+                active = highlighted == WordDirection.DOWN,
+                activeColor = MaterialTheme.colorScheme.secondary,
+                contentDescription = "Hide furigana",
+            ) { tint -> DirectionGlyph("ふ", tint) }
+            DirectionSlot(
+                alignment = Alignment.CenterStart,
+                active = highlighted == WordDirection.LEFT,
+                activeColor = HighestPriority,
+                contentDescription = "Mark to learn",
+            ) { tint -> DirectionGlyph("不", tint) }
+            DirectionSlot(
+                alignment = Alignment.CenterEnd,
+                active = highlighted == WordDirection.RIGHT,
+                activeColor = EasyPriority,
+                contentDescription = "Mark known",
+            ) { tint -> DirectionGlyph("知", tint) }
         }
     }
 }
@@ -61,16 +88,31 @@ fun directionFromOffset(offset: Offset, thresholdPx: Float): WordDirection? {
 }
 
 @Composable
-private fun BoxScope.DirectionIcon(icon: ImageVector, label: String, alignment: Alignment, active: Boolean) {
-    val background = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
-    val foreground = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+private fun DirectionGlyph(text: String, tint: Color) {
+    Text(text, color = tint, style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold))
+}
+
+@Composable
+private fun BoxScope.DirectionSlot(
+    alignment: Alignment,
+    active: Boolean,
+    activeColor: Color,
+    contentDescription: String,
+    content: @Composable (tint: Color) -> Unit,
+) {
+    val background = if (active) activeColor else MaterialTheme.colorScheme.surfaceVariant
+    val foreground = if (active) Color.White else activeColor
     Surface(
         shape = CircleShape,
         color = background,
-        modifier = Modifier.align(alignment).padding(4.dp).size(48.dp),
+        modifier = Modifier
+            .align(alignment)
+            .padding(4.dp)
+            .size(48.dp)
+            .semantics { this.contentDescription = contentDescription },
     ) {
         Box(contentAlignment = Alignment.Center) {
-            Icon(icon, contentDescription = label, tint = foreground)
+            content(foreground)
         }
     }
 }
