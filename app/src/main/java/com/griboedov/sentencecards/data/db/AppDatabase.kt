@@ -26,7 +26,12 @@ abstract class AppDatabase : RoomDatabase() {
                     context.applicationContext,
                     AppDatabase::class.java,
                     "japanese-sentence-cards.db",
-                ).build().also { instance = it }
+                )
+                    // The schema is still actively changing during this UI-prototype phase; rather
+                    // than write migrations for every iteration, just rebuild on schema changes.
+                    // Revisit once the schema stabilizes and real user data needs to survive.
+                    .fallbackToDestructiveMigration(dropAllTables = true)
+                    .build().also { instance = it }
             }
     }
 }

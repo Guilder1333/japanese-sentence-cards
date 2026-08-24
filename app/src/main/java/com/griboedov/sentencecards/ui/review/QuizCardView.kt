@@ -2,93 +2,111 @@ package com.griboedov.sentencecards.ui.review
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.griboedov.sentencecards.data.db.SentenceEntity
 import com.griboedov.sentencecards.data.db.WordEntity
+import com.griboedov.sentencecards.ui.theme.EasyPriority
+import com.griboedov.sentencecards.ui.theme.HighestPriority
 import com.griboedov.sentencecards.ui.theme.JapaneseSentenceStyle
+import com.griboedov.sentencecards.ui.theme.wordStatusColor
 
 /**
- * The "special kind of flash card" shown once a sentence is marked Learned: quizzes the reading
- * and meaning of each main word one at a time (README: "Quiz should include all the main words in
- * the sentence... Also successful words removed from main words of the sentence, if there are no
- * more main words... we can assume it as learned").
+ * The "special kind of flash card" shown once a sentence is marked Learned: a reading quiz for
+ * every main word at once (README: "Quiz should include all the main words in the sentence").
+ * Each word gets 2-4 multiple-choice reading options; picking one locks it in and reveals right
+ * vs wrong immediately, but nothing is graded in the data layer until [onContinue] is pressed with
+ * every word answered. Meaning isn't quizzed yet - extracting it automatically isn't
+ * straightforward, so for now this only covers reading.
+ *
+ * No furigana appears anywhere on this card (not even force-furigana words) - showing it would
+ * give the answer away.
  */
 @Composable
 fun QuizCardView(
     card: SentenceEntity,
     words: Map<Long, WordEntity>,
-    revealed: Boolean,
-    onReveal: () -> Unit,
-    onAnswer: (Boolean) -> Unit,
+    options: Map<Long, List<String>>,
+    answers: Map<Long, String>,
+    allAnswered: Boolean,
+    onSelect: (Long, String) -> Unit,
+    onContinue: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val wordId = card.quizRemainingWordIds.firstOrNull()
-    val word = wordId?.let { words[it] }
-
-    Card(modifier = modifier.fillMaxWidth().aspectRatio(1.3f)) {
+    Card(modifier = modifier.fillMaxWidth()) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
+            modifier = Modifier.fillMaxWidth().padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center,
+            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(
-                text = "Quiz - ${card.quizRemainingWordIds.size} word(s) left",
-                style = MaterialTheme.typography.labelLarge,
-            )
-            Text(
-                text = "What's the reading and meaning?",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.padding(top = 4.dp, bottom = 20.dp),
-            )
+            Text("Quiz - what's the reading?", style = MaterialTheme.typography.labelLarge)
 
-            if (word == null) {
-                Text("No word to quiz.", textAlign = TextAlign.Center)
-                return@Column
+            FlowRow(horizontalArrangement = Arrangement.Center, verticalArrangement = Arrangement.Center) {
+                for (token in card.structure) {
+                    val word = token.id?.let { words[it] }
+                    val isMainWord = token.id != null && token.id in card.mainWordIds
+                    Text(
+                        text = token.word,
+                        style = JapaneseSentenceStyle,
+                        color = wordStatusColor(word, isMainWord) ?: Color.Unspecified,
+                        modifier = Modifier.padding(horizontal = 2.dp),
+                    )
+                }
             }
 
-            Text(text = word.word, style = JapaneseSentenceStyle, textAlign = TextAlign.Center)
+            if (options.isEmpty()) {
+                Text("No readings left to quiz.", style = MaterialTheme.typography.bodyMedium)
+            }
 
-            if (revealed) {
-                Text(
-                    text = word.furigana.orEmpty(),
-                    style = MaterialTheme.typography.bodyMedium,
-                    modifier = Modifier.padding(top = 8.dp),
+            for ((wordId, wordOptions) in options) {
+                val word = words[wordId] ?: continue
+                QuizQuestion(
+                    word = word,
+                    options = wordOptions,
+                    selected = answers[wordId],
+                    onSelect = { option -> onSelect(wordId, option) },
                 )
-                Text(
-                    text = word.translation,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(top = 4.dp, bottom = 24.dp),
-                )
-                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = { onAnswer(true) }) {
-                        Icon(Icons.Filled.Check, contentDescription = null)
-                        Text("  Got it right")
-                    }
-                    OutlinedButton(onClick = { onAnswer(false) }) {
-                        Icon(Icons.Filled.Close, contentDescription = null)
-                        Text("  Got it wrong")
-                    }
+            }
+
+            Button(onClick = onContinue, enabled = allAnswered, modifier = Modifier.fillMaxWidth()) {
+                Text("Continue")
+            }
+        }
+    }
+}
+
+@Composable
+private fun QuizQuestion(
+    word: WordEntity,
+    options: List<String>,
+    selected: String?,
+    onSelect: (String) -> Unit,
+) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(word.word, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            for (option in options) {
+                val isCorrectOption = option == word.furigana
+                val colors = when {
+                    selected == null -> ButtonDefaults.filledTonalButtonColors()
+                    isCorrectOption -> ButtonDefaults.buttonColors(containerColor = EasyPriority, contentColor = Color.White)
+                    option == selected -> ButtonDefaults.buttonColors(containerColor = HighestPriority, contentColor = Color.White)
+                    else -> ButtonDefaults.filledTonalButtonColors()
                 }
-            } else {
-                Button(onClick = onReveal, modifier = Modifier.padding(top = 24.dp)) {
-                    Text("Show answer")
+                Button(onClick = { if (selected == null) onSelect(option) }, colors = colors) {
+                    Text(option)
                 }
             }
         }

@@ -11,11 +11,14 @@ import androidx.room.PrimaryKey
  * records which review button was last pressed, so [com.griboedov.sentencecards.data.queue]
  * logic can detect "marked the same level twice in a row" and demote a level further.
  *
- * Quiz: marking a card "Learned" does not finish it immediately - it sets [pendingQuiz] and
- * seeds [quizRemainingWordIds] from [mainWordIds]. The next time this card comes up for review it
- * is rendered as a quiz card instead of a normal front/back card; answering a word correctly
- * removes it from [quizRemainingWordIds], and once that list is empty the sentence becomes
- * [learned].
+ * Quiz: marking a card "Learned" moves it to the medium queue and sets [pendingQuiz] - it does
+ * NOT finish the card, and it stays visible in review. The next time this card comes up it is
+ * rendered as a quiz card (reading multiple-choice for every word in [mainWordIds]) instead of a
+ * normal front/back card, and [pendingQuiz] always clears after that one round - it is never
+ * re-quizzed back-to-back. Words answered correctly are removed from [mainWordIds]; if any remain
+ * afterwards, the card returns to normal front/back review at the hard queue (marking it Learned
+ * again later re-quizzes just what's left), and once [mainWordIds] is empty the sentence is
+ * [learned] and [quizSucceeded].
  */
 @Entity(tableName = "sentences")
 data class SentenceEntity(
@@ -23,12 +26,12 @@ data class SentenceEntity(
     val text: String,
     val translation: String,
     val structure: List<SentenceToken>,
-    /** Word ids this sentence was picked to teach - the words quizzed once marked "Learned". */
+    /** Word ids this sentence was picked to teach. Shrinks as the quiz is answered correctly. */
     val mainWordIds: List<Long>,
     val shownTimes: Int = 0,
     val learned: Boolean = false,
     val queueLevel: QueueLevel = QueueLevel.HIGHEST,
     val lastMarkedLevel: QueueLevel? = null,
     val pendingQuiz: Boolean = false,
-    val quizRemainingWordIds: List<Long> = emptyList(),
+    val quizSucceeded: Boolean = false,
 )

@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "c40d6d5f3538e821418f44b8ab4f2e74",
+    "identityHash": "9c7aa3066662b44daa1b721a0b3d7723",
     "entities": [
       {
         "tableName": "words",
@@ -89,7 +89,7 @@
       },
       {
         "tableName": "sentences",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `text` TEXT NOT NULL, `translation` TEXT NOT NULL, `structure` TEXT NOT NULL, `mainWordIds` TEXT NOT NULL, `shownTimes` INTEGER NOT NULL, `learned` INTEGER NOT NULL, `queueLevel` TEXT NOT NULL, `lastMarkedLevel` TEXT, `pendingQuiz` INTEGER NOT NULL, `quizRemainingWordIds` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `text` TEXT NOT NULL, `translation` TEXT NOT NULL, `structure` TEXT NOT NULL, `mainWordIds` TEXT NOT NULL, `shownTimes` INTEGER NOT NULL, `learned` INTEGER NOT NULL, `queueLevel` TEXT NOT NULL, `lastMarkedLevel` TEXT, `pendingQuiz` INTEGER NOT NULL, `quizSucceeded` INTEGER NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -151,9 +151,9 @@
             "notNull": true
           },
           {
-            "fieldPath": "quizRemainingWordIds",
-            "columnName": "quizRemainingWordIds",
-            "affinity": "TEXT",
+            "fieldPath": "quizSucceeded",
+            "columnName": "quizSucceeded",
+            "affinity": "INTEGER",
             "notNull": true
           }
         ],
@@ -167,7 +167,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c40d6d5f3538e821418f44b8ab4f2e74')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9c7aa3066662b44daa1b721a0b3d7723')"
     ]
   }
 }

@@ -84,31 +84,80 @@ class QueueEngineTest {
     }
 
     @Test
-    fun `learned queues the quiz at medium priority instead of finishing immediately`() {
+    fun `learned moves to medium priority and queues the quiz instead of finishing immediately`() {
         var card = sentence(1, QueueLevel.HIGHEST).copy(mainWordIds = listOf(10L, 20L))
         card = card.applyReview(ReviewAction.LEARNED)
 
         assertEquals(QueueLevel.MEDIUM, card.queueLevel)
         assertEquals(true, card.pendingQuiz)
-        assertEquals(listOf(10L, 20L), card.quizRemainingWordIds)
+        assertEquals(listOf(10L, 20L), card.mainWordIds)
         assertEquals(false, card.learned)
     }
 
     @Test
-    fun `sentence becomes learned once every quiz word is answered correctly`() {
+    fun `quiz words answered wrong send the card back to normal review at the hard queue`() {
         var card = sentence(1, QueueLevel.MEDIUM).copy(
             pendingQuiz = true,
-            quizRemainingWordIds = listOf(10L, 20L),
+            mainWordIds = listOf(10L, 20L),
         )
 
-        card = card.gradeQuizWord(10L, correct = false)
-        assertEquals(listOf(20L, 10L), card.quizRemainingWordIds) // wrong answer cycles to the back
+        // Only 20L answered correctly this round - 10L stays in the main word list.
+        card = card.applyQuizResult(correctWordIds = setOf(20L))
+
+        assertEquals(listOf(10L), card.mainWordIds)
+        assertEquals(QueueLevel.HIGHEST, card.queueLevel)
+        // The quiz only runs once per Learned press - it must NOT stay pending and re-trigger
+        // itself; the card goes back to being a normal flip-and-grade flashcard.
+        assertEquals(false, card.pendingQuiz)
         assertEquals(false, card.learned)
+        assertEquals(false, card.quizSucceeded)
+    }
 
-        card = card.gradeQuizWord(20L, correct = true)
-        card = card.gradeQuizWord(10L, correct = true)
+    @Test
+    fun `a partially-failed quiz round explicitly clears pendingQuiz, learned and quizSucceeded`() {
+        // Simulates a stale pendingQuiz/learned/quizSucceeded state to prove applyQuizResult
+        // actively clears it on partial failure, rather than merely happening to start false.
+        var card = sentence(1, QueueLevel.MEDIUM).copy(
+            pendingQuiz = true,
+            mainWordIds = listOf(10L, 20L),
+            learned = true,
+            quizSucceeded = true,
+        )
 
+        card = card.applyQuizResult(correctWordIds = setOf(20L))
+
+        assertEquals(false, card.pendingQuiz)
+        assertEquals(false, card.learned)
+        assertEquals(false, card.quizSucceeded)
+    }
+
+    @Test
+    fun `marking Learned again after a partial failure re-quizzes only the words still remaining`() {
+        var card = sentence(1, QueueLevel.HIGHEST).copy(mainWordIds = listOf(10L, 20L))
+
+        card = card.applyReview(ReviewAction.LEARNED) // first quiz round queued
+        card = card.applyQuizResult(correctWordIds = setOf(20L)) // 10L wrong, back to normal review
+        assertEquals(listOf(10L), card.mainWordIds)
+        assertEquals(false, card.pendingQuiz)
+
+        card = card.applyReview(ReviewAction.LEARNED) // reviewed normally again, marked Learned again
+
+        assertEquals(true, card.pendingQuiz)
+        assertEquals(listOf(10L), card.mainWordIds)
+    }
+
+    @Test
+    fun `sentence becomes learned and quiz-succeeded once every main word is answered correctly`() {
+        var card = sentence(1, QueueLevel.HIGHEST).copy(
+            pendingQuiz = true,
+            mainWordIds = listOf(10L),
+        )
+
+        card = card.applyQuizResult(correctWordIds = setOf(10L))
+
+        assertEquals(emptyList<Long>(), card.mainWordIds)
         assertEquals(true, card.learned)
+        assertEquals(true, card.quizSucceeded)
         assertEquals(false, card.pendingQuiz)
     }
 

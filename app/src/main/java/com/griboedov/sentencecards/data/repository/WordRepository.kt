@@ -42,8 +42,17 @@ class WordRepository(private val dao: WordDao) {
     suspend fun recordTranslationShown(id: Long) =
         updateWord(id) { it.copy(timesTranslationShown = it.timesTranslationShown + 1) }
 
+    /**
+     * A correct quiz answer "graduates" the word the same way manually marking it known does
+     * ([markKnown]) - otherwise it keeps its forceFurigana crutch forever, since nothing else
+     * ever clears that flag once the word stops being a sentence's main word.
+     */
     suspend fun recordQuizResult(id: Long, correct: Boolean) = updateWord(id) {
-        if (correct) it.copy(quizSuccess = it.quizSuccess + 1) else it.copy(quizFails = it.quizFails + 1)
+        if (correct) {
+            it.copy(quizSuccess = it.quizSuccess + 1, toLearn = false, forceFurigana = false)
+        } else {
+            it.copy(quizFails = it.quizFails + 1)
+        }
     }
 
     private suspend inline fun updateWord(

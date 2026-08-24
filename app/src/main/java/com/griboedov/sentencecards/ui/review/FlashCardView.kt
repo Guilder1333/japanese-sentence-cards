@@ -132,8 +132,11 @@ private fun CardFront(card: SentenceEntity, words: Map<Long, WordEntity>) {
     ) {
         for (token in card.structure) {
             val word = token.id?.let { words[it] }
-            val showFurigana = word != null && word.forceFurigana && !word.hideFurigana
             val isMainWord = token.id != null && token.id in card.mainWordIds
+            // Front furigana rule: only for words still needing the crutch (forceFurigana, e.g.
+            // not yet confirmed known) - and never for this sentence's main/quizzed words, since
+            // those are exactly what the reading quiz is testing recall of.
+            val showFurigana = word != null && word.forceFurigana && !word.hideFurigana && !isMainWord
             TokenText(
                 token = token,
                 furigana = if (showFurigana) token.furigana else null,

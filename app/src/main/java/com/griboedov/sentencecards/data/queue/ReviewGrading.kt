@@ -20,14 +20,13 @@ enum class ReviewAction(val targetLevel: QueueLevel?) {
  * too, in which case it is demoted one level further (README: "if sentence is marked as same
  * level two times in a row, it is decreased in priority to level below").
  *
- * Learned doesn't finish the card - it queues the word quiz at medium priority; the card only
- * becomes [SentenceEntity.learned] once every main word has been answered correctly in the quiz
- * (see [gradeQuizWord]).
+ * Learned doesn't finish the card - it moves to the medium queue and queues one round of the
+ * reading quiz (see [applyQuizResult]); the sentence isn't hidden from review until that quiz is
+ * fully passed, possibly across several separate Learned presses.
  */
 fun SentenceEntity.applyReview(action: ReviewAction): SentenceEntity = when (action) {
     ReviewAction.LEARNED -> copy(
         pendingQuiz = true,
-        quizRemainingWordIds = mainWordIds,
         queueLevel = QueueLevel.MEDIUM,
         lastMarkedLevel = null,
     )
@@ -39,16 +38,27 @@ fun SentenceEntity.applyReview(action: ReviewAction): SentenceEntity = when (act
 }
 
 /**
- * Applies one quiz answer for [wordId]. Correct answers drop the word from the remaining list;
- * once none remain the sentence is fully [SentenceEntity.learned]. Incorrect answers cycle the
- * word to the back of the list so the quiz keeps moving but comes back to it before finishing.
+ * Applies one quiz attempt: [correctWordIds] is the subset of [SentenceEntity.mainWordIds] the
+ * user answered correctly this round. The quiz only runs once per "Learned" press - either way,
+ * [SentenceEntity.pendingQuiz] clears afterwards, so the card is never re-quizzed back-to-back.
+ *
+ * Correct words are dropped from the main word list. If any remain, the quiz partially failed -
+ * the sentence is explicitly *not* [SentenceEntity.learned] (learning continues), and the card
+ * returns to normal front/back review at the hard queue; marking it Learned again later re-quizzes
+ * only the words still remaining. Once none remain, the sentence is fully [SentenceEntity.learned]
+ * and [SentenceEntity.quizSucceeded].
  */
-fun SentenceEntity.gradeQuizWord(wordId: Long, correct: Boolean): SentenceEntity {
-    val withoutWord = quizRemainingWordIds - wordId
-    val remaining = if (correct) withoutWord else withoutWord + wordId
+fun SentenceEntity.applyQuizResult(correctWordIds: Set<Long>): SentenceEntity {
+    val remaining = mainWordIds.filterNot { it in correctWordIds }
     return if (remaining.isEmpty()) {
-        copy(learned = true, pendingQuiz = false, quizRemainingWordIds = emptyList())
+        copy(mainWordIds = remaining, learned = true, quizSucceeded = true, pendingQuiz = false)
     } else {
-        copy(quizRemainingWordIds = remaining)
+        copy(
+            mainWordIds = remaining,
+            queueLevel = QueueLevel.HIGHEST,
+            pendingQuiz = false,
+            learned = false,
+            quizSucceeded = false,
+        )
     }
 }
