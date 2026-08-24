@@ -1,0 +1,173 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "c40d6d5f3538e821418f44b8ab4f2e74",
+    "entities": [
+      {
+        "tableName": "words",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `word` TEXT NOT NULL, `furigana` TEXT, `translation` TEXT NOT NULL, `timesShown` INTEGER NOT NULL, `timesFuriganaShown` INTEGER NOT NULL, `timesTranslationShown` INTEGER NOT NULL, `toLearn` INTEGER NOT NULL, `hideFurigana` INTEGER NOT NULL, `forceFurigana` INTEGER NOT NULL, `quizSuccess` INTEGER NOT NULL, `quizFails` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "word",
+            "columnName": "word",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "furigana",
+            "columnName": "furigana",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "translation",
+            "columnName": "translation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timesShown",
+            "columnName": "timesShown",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timesFuriganaShown",
+            "columnName": "timesFuriganaShown",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timesTranslationShown",
+            "columnName": "timesTranslationShown",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "toLearn",
+            "columnName": "toLearn",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "hideFurigana",
+            "columnName": "hideFurigana",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "forceFurigana",
+            "columnName": "forceFurigana",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quizSuccess",
+            "columnName": "quizSuccess",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quizFails",
+            "columnName": "quizFails",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "sentences",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `text` TEXT NOT NULL, `translation` TEXT NOT NULL, `structure` TEXT NOT NULL, `mainWordIds` TEXT NOT NULL, `shownTimes` INTEGER NOT NULL, `learned` INTEGER NOT NULL, `queueLevel` TEXT NOT NULL, `lastMarkedLevel` TEXT, `pendingQuiz` INTEGER NOT NULL, `quizRemainingWordIds` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "translation",
+            "columnName": "translation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "structure",
+            "columnName": "structure",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "mainWordIds",
+            "columnName": "mainWordIds",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "shownTimes",
+            "columnName": "shownTimes",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "learned",
+            "columnName": "learned",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "queueLevel",
+            "columnName": "queueLevel",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastMarkedLevel",
+            "columnName": "lastMarkedLevel",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "pendingQuiz",
+            "columnName": "pendingQuiz",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "quizRemainingWordIds",
+            "columnName": "quizRemainingWordIds",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c40d6d5f3538e821418f44b8ab4f2e74')"
+    ]
+  }
+}
