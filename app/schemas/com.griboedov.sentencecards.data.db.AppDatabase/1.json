@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "9c7aa3066662b44daa1b721a0b3d7723",
+    "identityHash": "48067214fe17c5aaed7d37d6df9ffd4d",
     "entities": [
       {
         "tableName": "words",
@@ -89,11 +89,53 @@
       },
       {
         "tableName": "sentences",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `text` TEXT NOT NULL, `translation` TEXT NOT NULL, `structure` TEXT NOT NULL, `mainWordIds` TEXT NOT NULL, `shownTimes` INTEGER NOT NULL, `learned` INTEGER NOT NULL, `queueLevel` TEXT NOT NULL, `lastMarkedLevel` TEXT, `pendingQuiz` INTEGER NOT NULL, `quizSucceeded` INTEGER NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `text` TEXT NOT NULL, `translation` TEXT NOT NULL, `structure` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
             "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "text",
+            "columnName": "text",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "translation",
+            "columnName": "translation",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "structure",
+            "columnName": "structure",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "cards",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `sentenceId` INTEGER NOT NULL, `text` TEXT NOT NULL, `translation` TEXT NOT NULL, `structure` TEXT NOT NULL, `mainWordIds` TEXT NOT NULL, `shownTimes` INTEGER NOT NULL, `learned` INTEGER NOT NULL, `queueLevel` TEXT NOT NULL, `lastMarkedLevel` TEXT, `pendingQuiz` INTEGER NOT NULL, `quizSucceeded` INTEGER NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sentenceId",
+            "columnName": "sentenceId",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -163,11 +205,47 @@
             "id"
           ]
         }
+      },
+      {
+        "tableName": "sentence_words",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`sentenceId` INTEGER NOT NULL, `wordId` INTEGER NOT NULL, PRIMARY KEY(`sentenceId`, `wordId`))",
+        "fields": [
+          {
+            "fieldPath": "sentenceId",
+            "columnName": "sentenceId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "wordId",
+            "columnName": "wordId",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "sentenceId",
+            "wordId"
+          ]
+        },
+        "indices": [
+          {
+            "name": "index_sentence_words_wordId",
+            "unique": false,
+            "columnNames": [
+              "wordId"
+            ],
+            "orders": [],
+            "createSql": "CREATE INDEX IF NOT EXISTS `index_sentence_words_wordId` ON `${TABLE_NAME}` (`wordId`)"
+          }
+        ]
       }
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '9c7aa3066662b44daa1b721a0b3d7723')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '48067214fe17c5aaed7d37d6df9ffd4d')"
     ]
   }
 }

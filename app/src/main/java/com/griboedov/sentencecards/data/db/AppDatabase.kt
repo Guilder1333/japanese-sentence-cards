@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
 @Database(
-    entities = [WordEntity::class, SentenceEntity::class],
+    entities = [WordEntity::class, SentenceEntity::class, CardEntity::class, SentenceWordCrossRef::class],
     version = 1,
     exportSchema = true,
 )
@@ -15,6 +15,7 @@ import androidx.room.TypeConverters
 abstract class AppDatabase : RoomDatabase() {
     abstract fun wordDao(): WordDao
     abstract fun sentenceDao(): SentenceDao
+    abstract fun cardDao(): CardDao
 
     companion object {
         @Volatile

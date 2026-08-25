@@ -12,13 +12,11 @@ rather than silent guessing.
 - **New word defaults** (`data/importer/StructuredImport.kt`): a brand-new kanji/word from import
   gets `forceFurigana = true` (shows furigana until confirmed known - reconciling "furigana shown
   by default for any new kanji/word" from the README's metrics section with "front only shows
-  furigana for force-furigana words" from its UI section) and `toLearn = true`. That second part
-  isn't the README's literal "new words are considered false" default - per your clarification,
-  every word the current importer creates is also one of its sentence's main words, and a main
-  word is by definition a to-learn target (that's why the sentence exists), so it should start
-  flagged that way rather than looking indistinguishable from a confirmed-known word. "Known" now
-  means the app is simply aware of a word (it's tracked, with translation/furigana); "to learn" is
-  the explicit learning-target flag - two different things, not opposite ends of one flag.
+  furigana for force-furigana words" from its UI section) and `toLearn = false`, the README's
+  literal default. An earlier version of this note had `toLearn = true` here, reasoning that every
+  imported word was automatically one of its sentence's main (to-learn) words - that's no longer
+  true now that import only populates the raw sentence pool and never creates cards directly (see
+  "Sentences vs. cards split" below), so the literal README default applies again.
 
 - **4-direction menu effects** (`data/repository/WordRepository.kt`): right (know) clears both
   `toLearn` and `forceFurigana`; left (learn) sets both `toLearn` and `forceFurigana`; down hides
@@ -86,6 +84,26 @@ rather than silent guessing.
   JSON files are expected to reach the megabytes - too large to comfortably paste, and too large
   to dump into an editable text field besides (Compose's text field gets sluggish with very large
   editable content). The paste box is kept as a secondary path for quick/small manual tests.
+
+- **Sentences vs. cards split** (`data/db/SentenceEntity.kt`, `CardEntity.kt`, `SentenceWordCrossRef.kt`,
+  `data/cards/`): per your clarification, `sentences` is just the raw imported pool (can be
+  enormous - a whole book) and is never itself reviewable. `cards` is a separate table holding the
+  actual review entities (queue state, `mainWordIds`, quiz state, etc. - what `SentenceEntity` used
+  to be), each pointing back at the sentence it was generated from via `sentenceId`. A card copies
+  its text/translation/structure from the sentence at creation time rather than joining live, so a
+  card's wording can't shift under a user mid-review. Consequently:
+  - Import only writes to `sentences` (plus the `sentence_words` cross-reference table used to find
+    "sentences containing word X" without scanning/deserializing every row) - it no longer creates
+    any cards, and a freshly imported word's `toLearn` reverts to the README's literal default
+    (`false`), since importing no longer means "this sentence exists to teach this word".
+  - Cards are only ever created by `CardGenerator`, triggered from every place a word gets marked
+    to-learn (`WordRepository.markToLearn`, `.setToLearn(id, true)`, `.addFromDictionary(...,
+    TO_LEARN)`) - never by import.
+  - A sentence that already backs a card is excluded from future candidate pools (any word's), so
+    the same sentence never backs two cards, and re-marking a word to-learn (e.g. toggling it off
+    and back on) naturally surfaces the *next*-best batch instead of duplicating the first one.
+  - A freshly generated card's `mainWordIds` is just `[wordId]` - the one word it was picked for -
+    since the scoring formula already discourages candidates containing other to-learn words.
 
 - **Word ids on import**: if a structure token omits `id` for a `kind: 1` (word) token, one is
   assigned (`max known id + 1`). If a `kind: 1` token's `id` already exists in the database, the

@@ -1,13 +1,14 @@
 package com.griboedov.sentencecards.data.queue
 
+import com.griboedov.sentencecards.data.db.CardEntity
 import com.griboedov.sentencecards.data.db.QueueLevel
-import com.griboedov.sentencecards.data.db.SentenceEntity
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 
-private fun sentence(id: Long, level: QueueLevel, learned: Boolean = false) = SentenceEntity(
+private fun sentence(id: Long, level: QueueLevel, learned: Boolean = false) = CardEntity(
     id = id,
+    sentenceId = id,
     text = "text$id",
     translation = "translation$id",
     structure = emptyList(),

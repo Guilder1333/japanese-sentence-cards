@@ -32,7 +32,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.griboedov.sentencecards.data.db.SentenceEntity
+import com.griboedov.sentencecards.data.db.CardEntity
 import com.griboedov.sentencecards.data.db.SentenceToken
 import com.griboedov.sentencecards.data.db.WordEntity
 import com.griboedov.sentencecards.ui.theme.FuriganaStyle
@@ -48,7 +48,7 @@ import com.griboedov.sentencecards.ui.theme.wordStatusColor
  */
 @Composable
 fun FlashCardView(
-    card: SentenceEntity,
+    card: CardEntity,
     words: Map<Long, WordEntity>,
     flipped: Boolean,
     onFlip: () -> Unit,
@@ -109,7 +109,7 @@ fun FlashCardView(
 }
 
 @Composable
-private fun CardFront(card: SentenceEntity, words: Map<Long, WordEntity>) {
+private fun CardFront(card: CardEntity, words: Map<Long, WordEntity>) {
     FlowRow(
         modifier = Modifier.fillMaxWidth().wrapContentHeight(),
         horizontalArrangement = Arrangement.Center,
@@ -136,7 +136,7 @@ private val FlickThreshold = 24.dp
 
 @Composable
 private fun CardBack(
-    card: SentenceEntity,
+    card: CardEntity,
     words: Map<Long, WordEntity>,
     onWordTap: (WordEntity) -> Unit,
     onFlickStart: (WordEntity) -> Unit,

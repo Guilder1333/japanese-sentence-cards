@@ -1,22 +1,27 @@
 package com.griboedov.sentencecards.data.db
 
 import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
 import androidx.room.Query
-import androidx.room.Update
 import androidx.room.Upsert
-import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface SentenceDao {
-    @Query("SELECT * FROM sentences ORDER BY id")
-    fun observeAll(): Flow<List<SentenceEntity>>
-
     @Upsert
-    suspend fun upsertAll(sentences: List<SentenceEntity>)
+    suspend fun upsertAll(sentences: List<SentenceEntity>): List<Long>
 
-    @Update
-    suspend fun update(sentence: SentenceEntity)
+    @Query("SELECT * FROM sentences WHERE id IN (:ids)")
+    suspend fun getByIds(ids: List<Long>): List<SentenceEntity>
 
     @Query("SELECT COUNT(*) FROM sentences")
     suspend fun count(): Int
+
+    /** Ignores duplicates: a word repeated within one sentence only needs one link row. */
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertWordRefs(refs: List<SentenceWordCrossRef>)
+
+    /** Every sentence id whose structure contains [wordId] as a kind=WORD token - see [SentenceWordCrossRef]. */
+    @Query("SELECT sentenceId FROM sentence_words WHERE wordId = :wordId")
+    suspend fun sentenceIdsContaining(wordId: Long): List<Long>
 }

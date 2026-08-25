@@ -1,7 +1,7 @@
 package com.griboedov.sentencecards.data.queue
 
+import com.griboedov.sentencecards.data.db.CardEntity
 import com.griboedov.sentencecards.data.db.QueueLevel
-import com.griboedov.sentencecards.data.db.SentenceEntity
 
 /**
  * Implements the README's priority-queue review order:
@@ -30,7 +30,7 @@ class QueueEngine {
     }
 
     /** Picks the next card to show, starting a new pass over the highest non-empty queue if needed. */
-    fun nextCard(all: List<SentenceEntity>): SentenceEntity? {
+    fun nextCard(all: List<CardEntity>): CardEntity? {
         val eligible = all.filter { !it.learned }
         if (eligible.isEmpty()) {
             reset()

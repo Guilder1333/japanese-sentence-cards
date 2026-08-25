@@ -9,9 +9,21 @@ the bundled dictionary's licensing.
 
 **Done**
 - Known kanji/words database with all 8 metrics below (Room `WordEntity`).
-- Flash card + sentence storage as specced (`SentenceEntity`, `SentenceToken`).
-- Structured sentence import (bulk JSON) - new kanji/words default not-learned, hiragana/katakana
-  aren't tracked, per the rule below.
+- Sentence pool + flash card storage as two separate tables (`SentenceEntity` = raw imported
+  sentences, searchable by word via a `sentence_words` index; `CardEntity` = the actual review
+  cards generated from it - see below).
+- Structured sentence import (bulk JSON) into the raw sentence pool - new kanji/words default
+  not-learned, hiragana/katakana aren't tracked, per the rule below. Importing no longer creates
+  cards directly.
+- "Adding word to learn" sentence-selection algorithm (`data/cards/CardGenerator.kt`,
+  `CardScoring.kt`): whenever a word is marked to-learn (4-direction menu, word browser, or
+  dictionary "add as to-learn"), the sentence pool is searched for sentences containing that word,
+  scored, and the 3 best-fitting become cards. Scoring per word token in a candidate sentence: +2
+  if the word isn't tracked yet, +2 if it's tracked and well-known (not to-learn, furigana no
+  longer forced), +1 if it's tracked but still shaky (not to-learn, furigana still forced), +0 if
+  it's itself another to-learn target (avoid stacking multiple unlearned words in one card). A
+  sentence already backing a card is never picked again, so re-marking a word to-learn surfaces
+  the next-best batch instead of duplicates.
 - Priority queue (highest/medium/easy/backlog), including "twice in a row demotes a level" and
   "don't jump the queue mid-pass".
 - Review UI: flip card, word 4-direction menu (know/learn/hide furigana/dictionary) via a
@@ -32,9 +44,7 @@ the bundled dictionary's licensing.
 
 **Not yet done**
 - Plain-text sentence import (the parsing script adapted from the Anki Python script) - only
-  already-structured JSON import exists.
-- The "adding word to learn" sentence-selection algorithm (percentage-of-known-words scoring) -
-  cards currently surface by queue priority only, not by how many of their words are already known.
+  already-structured JSON import exists in-app (`tools/import_book.py` produces the JSON offline).
 - Sentence full-text search / browsing screen - intentionally skipped for now.
 - JLPT base-level defaults (N4/N5 auto-known), from the Notes section.
 - Any in-app settings screen.
@@ -172,8 +182,15 @@ I have python script for making similar kind of flash cards for anki.
 
 ### Adding word to learn
 
-All sentences in the database should be calculated how many unknown words this sentence have, and app should choose the one that have the highest amount of known words (in percentage).
-Best case scenario, only word to learn is the unknown one.
+Whenever a word is marked to-learn, the sentence pool is searched for sentences containing it, and the 3 best-fitting become cards (see `data/cards/`).
+
+A sentence must contain the word to even be a candidate. Among candidates, each word token in the sentence adds bonus points:
+- not yet in the words table at all: +2
+- in the words table, not to-learn, but furigana still forced (still shaky): +1
+- in the words table, not to-learn, furigana no longer forced (well known): +2
+- itself another to-learn word: +0 (a card should isolate the one new word, not stack several)
+
+The 3 highest-scoring candidates become cards. A sentence already backing a card is excluded from future candidate pools, so marking the same word to-learn again (e.g. after toggling it off and on) surfaces the next-best batch rather than duplicates.
 
 # Notes
 

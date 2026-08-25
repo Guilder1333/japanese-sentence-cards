@@ -1,7 +1,7 @@
 package com.griboedov.sentencecards.data.queue
 
+import com.griboedov.sentencecards.data.db.CardEntity
 import com.griboedov.sentencecards.data.db.QueueLevel
-import com.griboedov.sentencecards.data.db.SentenceEntity
 
 /** The four buttons on the back of a review card. */
 enum class ReviewAction(val targetLevel: QueueLevel?) {
@@ -24,7 +24,7 @@ enum class ReviewAction(val targetLevel: QueueLevel?) {
  * reading quiz (see [applyQuizResult]); the sentence isn't hidden from review until that quiz is
  * fully passed, possibly across several separate Learned presses.
  */
-fun SentenceEntity.applyReview(action: ReviewAction): SentenceEntity = when (action) {
+fun CardEntity.applyReview(action: ReviewAction): CardEntity = when (action) {
     ReviewAction.LEARNED -> copy(
         pendingQuiz = true,
         queueLevel = QueueLevel.MEDIUM,
@@ -38,17 +38,17 @@ fun SentenceEntity.applyReview(action: ReviewAction): SentenceEntity = when (act
 }
 
 /**
- * Applies one quiz attempt: [correctWordIds] is the subset of [SentenceEntity.mainWordIds] the
+ * Applies one quiz attempt: [correctWordIds] is the subset of [CardEntity.mainWordIds] the
  * user answered correctly this round. The quiz only runs once per "Learned" press - either way,
- * [SentenceEntity.pendingQuiz] clears afterwards, so the card is never re-quizzed back-to-back.
+ * [CardEntity.pendingQuiz] clears afterwards, so the card is never re-quizzed back-to-back.
  *
  * Correct words are dropped from the main word list. If any remain, the quiz partially failed -
- * the sentence is explicitly *not* [SentenceEntity.learned] (learning continues), and the card
+ * the card is explicitly *not* [CardEntity.learned] (learning continues), and the card
  * returns to normal front/back review at the hard queue; marking it Learned again later re-quizzes
- * only the words still remaining. Once none remain, the sentence is fully [SentenceEntity.learned]
- * and [SentenceEntity.quizSucceeded].
+ * only the words still remaining. Once none remain, the card is fully [CardEntity.learned]
+ * and [CardEntity.quizSucceeded].
  */
-fun SentenceEntity.applyQuizResult(correctWordIds: Set<Long>): SentenceEntity {
+fun CardEntity.applyQuizResult(correctWordIds: Set<Long>): CardEntity {
     val remaining = mainWordIds.filterNot { it in correctWordIds }
     return if (remaining.isEmpty()) {
         copy(mainWordIds = remaining, learned = true, quizSucceeded = true, pendingQuiz = false)

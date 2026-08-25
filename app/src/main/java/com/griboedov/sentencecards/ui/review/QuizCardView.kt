@@ -16,7 +16,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.griboedov.sentencecards.data.db.SentenceEntity
+import com.griboedov.sentencecards.data.db.CardEntity
 import com.griboedov.sentencecards.data.db.WordEntity
 import com.griboedov.sentencecards.ui.theme.EasyPriority
 import com.griboedov.sentencecards.ui.theme.HighestPriority
@@ -36,7 +36,7 @@ import com.griboedov.sentencecards.ui.theme.wordStatusColor
  */
 @Composable
 fun QuizCardView(
-    card: SentenceEntity,
+    card: CardEntity,
     words: Map<Long, WordEntity>,
     options: Map<Long, List<String>>,
     answers: Map<Long, String>,

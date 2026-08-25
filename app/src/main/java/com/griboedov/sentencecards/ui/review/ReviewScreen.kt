@@ -41,7 +41,7 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
     val viewModel: ReviewViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
-                ReviewViewModel(app.sentenceRepository, app.wordRepository, app.dictionaryRepository)
+                ReviewViewModel(app.cardRepository, app.wordRepository, app.dictionaryRepository)
             }
         },
     )
@@ -53,7 +53,8 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
         when {
             state.isLoading -> CircularProgressIndicator()
             state.isEmpty -> Text(
-                text = "No cards to review yet.\nImport some sentences from the menu to get started.",
+                text = "No cards to review yet.\nImport some sentences, then mark a word " +
+                    "\"to learn\" in the word browser or dictionary to generate cards for it.",
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(32.dp),
             )

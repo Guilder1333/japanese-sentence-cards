@@ -3,6 +3,7 @@ package com.griboedov.sentencecards.data.importer
 import com.griboedov.sentencecards.data.db.SentenceDao
 import com.griboedov.sentencecards.data.db.SentenceEntity
 import com.griboedov.sentencecards.data.db.SentenceToken
+import com.griboedov.sentencecards.data.db.SentenceWordCrossRef
 import com.griboedov.sentencecards.data.db.TokenKind
 import com.griboedov.sentencecards.data.db.WordDao
 import com.griboedov.sentencecards.data.db.WordEntity
@@ -60,20 +61,24 @@ class SentenceImporter(
         var nextWordId = (wordDao.maxId() ?: 0L) + 1
         val newWords = mutableListOf<WordEntity>()
         val sentenceEntities = mutableListOf<SentenceEntity>()
+        // Parallel to sentenceEntities - the word ids each entry's structure references, for the
+        // sentence_words index (see SentenceWordCrossRef), built once real (post-insert) sentence
+        // ids are known below.
+        val sentenceWordIds = mutableListOf<Set<Long>>()
 
         for (sentence in parsed) {
             val resolvedTokens = mutableListOf<SentenceToken>()
-            val mainWordIds = mutableListOf<Long>()
+            val wordIds = mutableSetOf<Long>()
 
             for (token in sentence.structure) {
                 if (TokenKind.fromCode(token.kind) != TokenKind.WORD) {
                     resolvedTokens += token
                     continue
                 }
-                // Every kind-1 token here becomes one of this sentence's main words below, and a
-                // sentence's main words are, by definition, words it exists to teach - so a newly
-                // created word always starts as an explicit to-learn target (toLearn = true), not
-                // just something the app happens to now be aware of.
+                // Per the README: a brand-new kanji/word defaults to not-learned - this is just
+                // raw sentence-pool import, not "this sentence is now a card teaching this word"
+                // (that only happens via CardGenerator, once the word is explicitly marked
+                // to-learn).
                 val id = token.id ?: nextWordId++
                 val alreadyKnown = wordDao.getById(id) != null || newWords.any { it.id == id }
                 if (!alreadyKnown) {
@@ -82,24 +87,23 @@ class SentenceImporter(
                         word = token.word,
                         furigana = token.furigana,
                         translation = token.translation,
-                        toLearn = true,
                     )
                 }
-                mainWordIds += id
+                wordIds += id
                 resolvedTokens += token.copy(id = id)
             }
 
             val text = sentence.text ?: sentence.structure.joinToString("") { it.word }
-            sentenceEntities += SentenceEntity(
-                text = text,
-                translation = sentence.translation,
-                structure = resolvedTokens,
-                mainWordIds = mainWordIds,
-            )
+            sentenceEntities += SentenceEntity(text = text, translation = sentence.translation, structure = resolvedTokens)
+            sentenceWordIds += wordIds
         }
 
         if (newWords.isNotEmpty()) wordDao.upsertAll(newWords)
-        sentenceDao.upsertAll(sentenceEntities)
+        val insertedIds = sentenceDao.upsertAll(sentenceEntities)
+        val refs = insertedIds.indices.flatMap { i ->
+            sentenceWordIds[i].map { wordId -> SentenceWordCrossRef(sentenceId = insertedIds[i], wordId = wordId) }
+        }
+        if (refs.isNotEmpty()) sentenceDao.insertWordRefs(refs)
         return ImportResult.Success(sentences = sentenceEntities.size, newWords = newWords.size)
     }
 }

@@ -1,5 +1,6 @@
 package com.griboedov.sentencecards.data.repository
 
+import com.griboedov.sentencecards.data.cards.CardGenerator
 import com.griboedov.sentencecards.data.db.WordDao
 import com.griboedov.sentencecards.data.db.WordEntity
 import kotlinx.coroutines.flow.Flow
@@ -14,8 +15,11 @@ enum class WordStatusChoice(val label: String) {
 /**
  * Read/write access to the known-words/kanji table, plus the actions the word 4-direction menu
  * and word browser expose.
+ *
+ * Every path that marks a word to-learn also triggers [CardGenerator] - the README's "Adding word
+ * to learn" feature - to search the sentence pool and turn the 3 best-fitting sentences into cards.
  */
-class WordRepository(private val dao: WordDao) {
+class WordRepository(private val dao: WordDao, private val cardGenerator: CardGenerator) {
 
     fun observeAll(): Flow<List<WordEntity>> = dao.observeAll()
 
@@ -25,12 +29,18 @@ class WordRepository(private val dao: WordDao) {
     suspend fun markKnown(id: Long) = updateWord(id) { it.copy(toLearn = false, forceFurigana = false) }
 
     /** 4-direction menu: left - mark word for learning. */
-    suspend fun markToLearn(id: Long) = updateWord(id) { it.copy(toLearn = true, forceFurigana = true) }
+    suspend fun markToLearn(id: Long) {
+        updateWord(id) { it.copy(toLearn = true, forceFurigana = true) }
+        cardGenerator.generateCardsForWord(id)
+    }
 
     /** 4-direction menu: down - hide furigana (strong "well known" marker, not the same as learned). */
     suspend fun hideFurigana(id: Long) = updateWord(id) { it.copy(hideFurigana = true) }
 
-    suspend fun setToLearn(id: Long, toLearn: Boolean) = updateWord(id) { it.copy(toLearn = toLearn) }
+    suspend fun setToLearn(id: Long, toLearn: Boolean) {
+        updateWord(id) { it.copy(toLearn = toLearn) }
+        if (toLearn) cardGenerator.generateCardsForWord(id)
+    }
 
     suspend fun setHideFurigana(id: Long, hidden: Boolean) = updateWord(id) { it.copy(hideFurigana = hidden) }
 
@@ -78,6 +88,7 @@ class WordRepository(private val dao: WordDao) {
             WordStatusChoice.HIDE_FURIGANA -> base.copy(translation = translation, toLearn = false, forceFurigana = false, hideFurigana = true)
         }
         if (existing != null) dao.update(updated) else dao.upsert(updated)
+        if (status == WordStatusChoice.TO_LEARN) cardGenerator.generateCardsForWord(updated.id)
         return updated.id
     }
 

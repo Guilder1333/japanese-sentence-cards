@@ -2,7 +2,7 @@ package com.griboedov.sentencecards.ui.review
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.griboedov.sentencecards.data.db.SentenceEntity
+import com.griboedov.sentencecards.data.db.CardEntity
 import com.griboedov.sentencecards.data.db.WordEntity
 import com.griboedov.sentencecards.data.dictionary.DictionaryEntry
 import com.griboedov.sentencecards.data.dictionary.DictionaryRepository
@@ -11,7 +11,7 @@ import com.griboedov.sentencecards.data.queue.ReviewAction
 import com.griboedov.sentencecards.data.queue.applyQuizResult
 import com.griboedov.sentencecards.data.queue.applyReview
 import com.griboedov.sentencecards.data.quiz.readingOptions
-import com.griboedov.sentencecards.data.repository.SentenceRepository
+import com.griboedov.sentencecards.data.repository.CardRepository
 import com.griboedov.sentencecards.data.repository.WordRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +31,7 @@ sealed interface DictionaryLookup {
 }
 
 data class ReviewUiState(
-    val card: SentenceEntity? = null,
+    val card: CardEntity? = null,
     /** Words referenced by the current card's structure, keyed by word id. */
     val words: Map<Long, WordEntity> = emptyMap(),
     val isFlipped: Boolean = false,
@@ -58,13 +58,13 @@ data class ReviewUiState(
  * stops being eligible (graded away, or becomes learned).
  */
 class ReviewViewModel(
-    private val sentenceRepository: SentenceRepository,
+    private val cardRepository: CardRepository,
     private val wordRepository: WordRepository,
     private val dictionaryRepository: DictionaryRepository,
 ) : ViewModel() {
     private val queueEngine = QueueEngine()
 
-    private var allSentences: List<SentenceEntity> = emptyList()
+    private var allCards: List<CardEntity> = emptyList()
     private var allWords: Map<Long, WordEntity> = emptyMap()
     private var currentCardId: Long? = null
     private var lastCountedShownId: Long? = null
@@ -74,10 +74,10 @@ class ReviewViewModel(
 
     init {
         viewModelScope.launch {
-            combine(sentenceRepository.observeAll(), wordRepository.observeAll()) { sentences, words ->
-                sentences to words
-            }.collect { (sentences, words) ->
-                allSentences = sentences
+            combine(cardRepository.observeAll(), wordRepository.observeAll()) { cards, words ->
+                cards to words
+            }.collect { (cards, words) ->
+                allCards = cards
                 allWords = words.associateBy { it.id }
                 refresh()
             }
@@ -86,8 +86,8 @@ class ReviewViewModel(
 
     private fun refresh() {
         val previousCardId = currentCardId
-        val stillEligible = currentCardId?.let { id -> allSentences.find { it.id == id && !it.learned } }
-        val card = stillEligible ?: queueEngine.nextCard(allSentences)?.also { currentCardId = it.id }
+        val stillEligible = currentCardId?.let { id -> allCards.find { it.id == id && !it.learned } }
+        val card = stillEligible ?: queueEngine.nextCard(allCards)?.also { currentCardId = it.id }
 
         if (card == null) {
             currentCardId = null
@@ -126,7 +126,7 @@ class ReviewViewModel(
     }
 
     /** One multiple-choice reading question per main word that actually has a furigana to quiz. */
-    private fun buildQuizOptions(card: SentenceEntity): Map<Long, List<String>> {
+    private fun buildQuizOptions(card: CardEntity): Map<Long, List<String>> {
         val pool = allWords.values
         return card.mainWordIds.mapNotNull { id ->
             val word = allWords[id] ?: return@mapNotNull null
@@ -139,9 +139,9 @@ class ReviewViewModel(
      * Front-of-card display rule: furigana only for words with forceFurigana set (and not
      * hidden), and never for this sentence's main words - mirrors [FlashCardView]'s CardFront.
      */
-    private fun recordShown(card: SentenceEntity, cardWords: Map<Long, WordEntity>) {
+    private fun recordShown(card: CardEntity, cardWords: Map<Long, WordEntity>) {
         viewModelScope.launch {
-            sentenceRepository.update(card.copy(shownTimes = card.shownTimes + 1))
+            cardRepository.update(card.copy(shownTimes = card.shownTimes + 1))
             val wordIds = card.structure.mapNotNull { it.id }
             val furiganaShownIds = card.structure.mapNotNull { token ->
                 val id = token.id ?: return@mapNotNull null
@@ -163,10 +163,10 @@ class ReviewViewModel(
         if (card.pendingQuiz) return
         viewModelScope.launch {
             val updated = card.applyReview(action)
-            sentenceRepository.update(updated)
+            cardRepository.update(updated)
             queueEngine.onCardGraded(card.id)
             currentCardId = null
-            allSentences = allSentences.map { if (it.id == card.id) updated else it }
+            allCards = allCards.map { if (it.id == card.id) updated else it }
             refresh()
         }
     }
@@ -214,7 +214,7 @@ class ReviewViewModel(
     /**
      * Grades every answered word once the whole round is complete: correct words drop out of the
      * card's main word list, incorrect ones send the card to the hard queue for another attempt,
-     * and an empty main word list marks the sentence learned (see [applyQuizResult]).
+     * and an empty main word list marks the card learned (see [applyQuizResult]).
      */
     fun onQuizContinue() {
         val state = _uiState.value
@@ -235,10 +235,10 @@ class ReviewViewModel(
                 if (correct) correctIds += wordId
             }
             val updated = card.applyQuizResult(correctIds)
-            sentenceRepository.update(updated)
+            cardRepository.update(updated)
             queueEngine.onCardGraded(card.id)
             currentCardId = null
-            allSentences = allSentences.map { if (it.id == card.id) updated else it }
+            allCards = allCards.map { if (it.id == card.id) updated else it }
             refresh()
         }
     }
