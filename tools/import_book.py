@@ -46,8 +46,18 @@ KIND_PARTICLE = 2
 KIND_KATAKANA = 3
 
 SENTENCE_END_CHARS = set("。.！!？?")
-OPEN_BRACKETS = set("「『")
-CLOSE_BRACKETS = set("」』")
+# Half-width corner brackets (｢｣) show up in some digitized/OCR'd books mixed in with the normal
+# full-width ones (e.g. a "「...｣" pair) - include both so a stray half-width one doesn't go
+# unrecognized as a close and leave the quote looking permanently "open" (see MAX_UNCLOSED_QUOTE
+# below for what happens if that still occurs, e.g. from some other bracket variant).
+OPEN_BRACKETS = set("「『｢")
+CLOSE_BRACKETS = set("」』｣")
+# Safety valve: if a bracket never gets matched (unrecognized quote variant, stray/mismatched
+# character, etc.), sentence-end tracking would otherwise stay suppressed for the rest of the
+# file, silently swallowing every remaining sentence into one giant blob. Once an unmatched quote
+# has run on this long, give up on depth-tracking for it and go back to splitting on plain
+# terminators.
+MAX_UNCLOSED_QUOTE_CHARS = 500
 
 # Small hand-picked table so common particles/copulas get a short gloss for free, instead of
 # either an empty string or a misleading JMdict hit (kana-only entries like "は" collide with
@@ -122,18 +132,40 @@ def split_sentences(text: str) -> Iterator[str]:
     Splits raw book text into sentences at 。.！!？?, tracking 「」/『』 quote depth so a
     terminator *inside* a quote (e.g. 彼は「ああ、そうだ。」と言った。) doesn't cut the
     sentence short - the quote is just part of the sentence it's embedded in.
+
+    OCR'd/digitized books sometimes drop a line's closing quote mark entirely (see
+    tools/example.txt), which would otherwise leave depth stuck open and swallow every terminator
+    for the rest of the book (MAX_UNCLOSED_QUOTE_CHARS guards the worst case of that, but by then
+    several real sentences have already been merged together). As a targeted fix: if a line ends
+    with depth still open and the *next* non-blank line opens another bracket, assume the missing
+    close happened right there at the line boundary - a new quote starting strongly implies the
+    previous one ended.
     """
+    lines = text.split("\n")
     buf = []
     depth = 0
-    for ch in text:
-        buf.append(ch)
-        if ch in OPEN_BRACKETS:
-            depth += 1
-        elif ch in CLOSE_BRACKETS:
-            depth = max(0, depth - 1)
-        elif depth == 0 and ch in SENTENCE_END_CHARS:
-            yield "".join(buf)
-            buf = []
+    unclosed_start = 0
+    for i, line in enumerate(lines):
+        if i > 0:
+            buf.append("\n")
+        for ch in line:
+            buf.append(ch)
+            if ch in OPEN_BRACKETS:
+                if depth == 0:
+                    unclosed_start = len(buf) - 1
+                depth += 1
+            elif ch in CLOSE_BRACKETS:
+                depth = max(0, depth - 1)
+            if depth > 0 and len(buf) - unclosed_start > MAX_UNCLOSED_QUOTE_CHARS:
+                depth = 0
+            if depth == 0 and ch in SENTENCE_END_CHARS:
+                yield "".join(buf)
+                buf = []
+
+        if depth > 0:
+            next_line = next((ln for ln in lines[i + 1:] if ln.strip()), "")
+            if next_line[:1] in OPEN_BRACKETS:
+                depth -= 1
     if buf:
         yield "".join(buf)
 
