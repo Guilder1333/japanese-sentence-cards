@@ -17,17 +17,16 @@ rather than silent guessing.
 
 - **4-direction menu effects** (`data/repository/WordRepository.kt`): right (know) clears both
   `toLearn` and `forceFurigana`; left (learn) sets both `toLearn` and `forceFurigana`; down hides
-  furigana; up is a dictionary stub (README marks dictionary as TODO too). A correct quiz answer
-  applies the same `toLearn`/`forceFurigana` clear as the right-flick "known" action - otherwise a
-  word that graduates out of a sentence's main word list keeps showing front-side furigana forever
-  (nothing else ever clears `forceFurigana` once it stops being a main word).
+  furigana; up looks the word up in the bundled dictionary (see `data/dictionary/`) - the README
+  marks dictionary as a TODO, but it's since been fully implemented, offline. A correct quiz
+  answer applies the same `toLearn`/`forceFurigana` clear as the right-flick "known" action -
+  otherwise a word that graduates out of a sentence's main word list keeps showing front-side
+  furigana forever (nothing else ever clears `forceFurigana` once it stops being a main word).
 
-- **Per-word translation tooltip vs. the 4-direction menu**: the README mentions both a "times
-  translation shown" metric requiring "a special button" and a directional menu, but only
-  describes the menu's four directions (know/learn/hide/dictionary) - no "show translation"
-  direction. Implemented as: short tap on a back-of-card word shows its translation and counts
-  towards that metric; long-press opens the 4-direction menu. Two different gestures on the same
-  word, since the README's own four directions don't have room for a fifth action.
+- **Tap vs. the 4-direction menu** (`ui/review/ReviewViewModel.kt`): a plain tap on a back-of-card
+  word and flicking it up do the same thing - open the dictionary lookup - per your instruction.
+  The tap still separately counts towards the "times translation shown" metric, since the README
+  ties that metric to "a special button" distinct from the four directions.
 
 - **Word menu interaction** (`ui/review/FlashCardView.kt`, `FlickMenu.kt`): press-and-hold a word,
   then drag - like a phone's flick keyboard - to pick a direction; lifting the finger commits
@@ -80,3 +79,13 @@ rather than silent guessing.
   assigned (`max known id + 1`). If a `kind: 1` token's `id` already exists in the database, the
   existing word is reused rather than duplicated - this is how the same kanji recurring across
   sentences is meant to converge on one row.
+
+- **Dictionary tab and "add as..."** (`ui/dictionary/`, `WordRepository.addFromDictionary`): the
+  Dictionary tab browses the whole bundled JMdict data (prefix match on any kanji/kana spelling,
+  plus a substring match on meanings - only run on explicit search, not per keystroke, since the
+  meaning match is an unindexed scan over ~200k rows). Adding a result as known/to-learn/hide-
+  furigana upserts a row in the *internal* words table, matched by exact `word` text (kanji, or
+  kana if the entry has no kanji) - adding the same word twice updates it in place rather than
+  creating a duplicate. The new word's `translation` is the dictionary's full multi-sense summary
+  (not trimmed to one line, unlike sentence-import translations), and it gets a freshly assigned
+  id the same way importer-created words do (`max known id + 1`).

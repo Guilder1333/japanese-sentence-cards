@@ -2,6 +2,7 @@ package com.griboedov.sentencecards.ui.navigation
 
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.School
@@ -30,6 +31,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.griboedov.sentencecards.R
+import com.griboedov.sentencecards.ui.dictionary.DictionaryScreen
 import com.griboedov.sentencecards.ui.importsentences.ImportSentencesScreen
 import com.griboedov.sentencecards.ui.review.ReviewScreen
 import com.griboedov.sentencecards.ui.words.WordBrowserScreen
@@ -38,10 +40,13 @@ import kotlinx.coroutines.launch
 private sealed class Destination(val route: String, val label: String, val icon: androidx.compose.ui.graphics.vector.ImageVector) {
     data object Review : Destination("review", "Review", Icons.Filled.Style)
     data object Import : Destination("import", "Import sentences", Icons.Filled.FileUpload)
-    data object Words : Destination("words", "Word browser", Icons.Filled.School)
+    // "Words to learn": words already tracked in the internal database (imported or added from
+    // the dictionary), as opposed to Dictionary, which browses the full bundled JMdict data.
+    data object Words : Destination("words", "Words to learn", Icons.Filled.School)
+    data object Dictionary : Destination("dictionary", "Dictionary", Icons.AutoMirrored.Filled.MenuBook)
 }
 
-private val destinations = listOf(Destination.Review, Destination.Import, Destination.Words)
+private val destinations = listOf(Destination.Review, Destination.Import, Destination.Words, Destination.Dictionary)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,6 +107,7 @@ fun AppNavigation() {
                 composable(Destination.Review.route) { ReviewScreen() }
                 composable(Destination.Import.route) { ImportSentencesScreen() }
                 composable(Destination.Words.route) { WordBrowserScreen() }
+                composable(Destination.Dictionary.route) { DictionaryScreen() }
             }
         }
     }

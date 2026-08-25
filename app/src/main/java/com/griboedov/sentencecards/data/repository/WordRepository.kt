@@ -1,7 +1,15 @@
 package com.griboedov.sentencecards.data.repository
 
 import com.griboedov.sentencecards.data.db.WordDao
+import com.griboedov.sentencecards.data.db.WordEntity
 import kotlinx.coroutines.flow.Flow
+
+/** The three actions available for adding a dictionary word into the internal words database. */
+enum class WordStatusChoice(val label: String) {
+    KNOWN("known"),
+    TO_LEARN("to-learn"),
+    HIDE_FURIGANA("hide furigana"),
+}
 
 /**
  * Read/write access to the known-words/kanji table, plus the actions the word 4-direction menu
@@ -9,7 +17,7 @@ import kotlinx.coroutines.flow.Flow
  */
 class WordRepository(private val dao: WordDao) {
 
-    fun observeAll(): Flow<List<com.griboedov.sentencecards.data.db.WordEntity>> = dao.observeAll()
+    fun observeAll(): Flow<List<WordEntity>> = dao.observeAll()
 
     suspend fun getByIds(ids: List<Long>) = dao.getByIds(ids)
 
@@ -55,10 +63,25 @@ class WordRepository(private val dao: WordDao) {
         }
     }
 
-    private suspend inline fun updateWord(
-        id: Long,
-        transform: (com.griboedov.sentencecards.data.db.WordEntity) -> com.griboedov.sentencecards.data.db.WordEntity,
-    ) {
+    /**
+     * Adds a word looked up from the bundled dictionary into the internal words database (or
+     * updates it, if a word with the same text is already tracked - e.g. re-adding it with a
+     * different status). This is how a dictionary entry becomes a real, trackable [WordEntity]:
+     * dictionary browsing has no metrics of its own, only the internal table does.
+     */
+    suspend fun addFromDictionary(word: String, furigana: String?, translation: String, status: WordStatusChoice): Long {
+        val existing = dao.findByWord(word)
+        val base = existing ?: WordEntity(id = (dao.maxId() ?: 0L) + 1, word = word, furigana = furigana, translation = translation)
+        val updated = when (status) {
+            WordStatusChoice.KNOWN -> base.copy(translation = translation, toLearn = false, forceFurigana = false)
+            WordStatusChoice.TO_LEARN -> base.copy(translation = translation, toLearn = true, forceFurigana = true)
+            WordStatusChoice.HIDE_FURIGANA -> base.copy(translation = translation, toLearn = false, forceFurigana = false, hideFurigana = true)
+        }
+        if (existing != null) dao.update(updated) else dao.upsert(updated)
+        return updated.id
+    }
+
+    private suspend inline fun updateWord(id: Long, transform: (WordEntity) -> WordEntity) {
         val current = dao.getById(id) ?: return
         dao.update(transform(current))
     }

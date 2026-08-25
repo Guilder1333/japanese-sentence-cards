@@ -18,10 +18,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -40,14 +38,13 @@ import com.griboedov.sentencecards.data.db.WordEntity
 import com.griboedov.sentencecards.ui.theme.FuriganaStyle
 import com.griboedov.sentencecards.ui.theme.JapaneseSentenceStyle
 import com.griboedov.sentencecards.ui.theme.wordStatusColor
-import kotlinx.coroutines.delay
 
 /**
  * The normal (non-quiz) flash card: front shows plain Japanese text plus forced furigana only;
  * tapping flips it to the back, which shows the translation and furigana for every word except
  * ones with hidden furigana. The back does not flip back on tap - words there open a flick-style
- * 4-direction menu (press and hold, then drag - see [FlickMenu]) or a translation tooltip (plain
- * tap) instead.
+ * 4-direction menu (press and hold, then drag - see [FlickMenu]) instead. A plain tap on a word
+ * does the same thing as flicking it up: both open the dictionary lookup.
  */
 @Composable
 fun FlashCardView(
@@ -66,15 +63,6 @@ fun FlashCardView(
     // would risk swallowing the drag events that are still arriving at the word's pointerInput.
     var flickWord by remember(card.id) { mutableStateOf<WordEntity?>(null) }
     var flickDirection by remember(card.id) { mutableStateOf<WordDirection?>(null) }
-
-    // Translation tooltip: shown on a plain tap, auto-dismisses after a couple of seconds.
-    var tooltipWord by remember(card.id) { mutableStateOf<WordEntity?>(null) }
-    LaunchedEffect(tooltipWord) {
-        if (tooltipWord != null) {
-            delay(2_000)
-            tooltipWord = null
-        }
-    }
 
     Card(
         modifier = modifier
@@ -100,8 +88,8 @@ fun FlashCardView(
                     CardBack(
                         card = card,
                         words = words,
-                        onWordTap = { word -> onWordTap(word.id); tooltipWord = word },
-                        onFlickStart = { flickWord = it; flickDirection = null; tooltipWord = null },
+                        onWordTap = { word -> onWordTap(word.id) },
+                        onFlickStart = { flickWord = it; flickDirection = null },
                         onFlickDirectionChange = { flickDirection = it },
                         onFlickEnd = { commit ->
                             val word = flickWord
@@ -114,9 +102,6 @@ fun FlashCardView(
                         },
                     )
                     flickWord?.let { word -> FlickMenu(word = word, highlighted = flickDirection) }
-                    if (flickWord == null) {
-                        tooltipWord?.let { word -> TranslationTooltip(word = word) }
-                    }
                 }
             }
         }
@@ -166,8 +151,9 @@ private fun CardBack(
                 val isMainWord = token.id != null && token.id in card.mainWordIds
                 val tokenModifier = if (word != null) {
                     Modifier
-                        // Plain tap: translation tooltip. A separate pointerInput block, since
-                        // detectDragGesturesAfterLongPress below leaves short taps untouched.
+                        // Plain tap: dictionary lookup (same as flicking up). A separate
+                        // pointerInput block, since detectDragGesturesAfterLongPress below
+                        // leaves short taps untouched.
                         .pointerInput(word.id) {
                             detectTapGestures(onTap = { onWordTap(word) })
                         }
@@ -208,24 +194,6 @@ private fun CardBack(
             style = MaterialTheme.typography.bodyLarge,
             textAlign = TextAlign.Center,
         )
-    }
-}
-
-@Composable
-private fun TranslationTooltip(word: WordEntity) {
-    Surface(
-        shape = MaterialTheme.shapes.medium,
-        tonalElevation = 6.dp,
-        shadowElevation = 6.dp,
-    ) {
-        Column(
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            word.furigana?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
-            Text(word.word, style = MaterialTheme.typography.titleMedium)
-            Text(word.translation, style = MaterialTheme.typography.bodyMedium)
-        }
     }
 }
 

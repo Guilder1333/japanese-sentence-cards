@@ -40,10 +40,14 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
     val app = LocalContext.current.applicationContext as SentenceCardsApp
     val viewModel: ReviewViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { ReviewViewModel(app.sentenceRepository, app.wordRepository) }
+            initializer {
+                ReviewViewModel(app.sentenceRepository, app.wordRepository, app.dictionaryRepository)
+            }
         },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+
+    DictionaryDialog(lookup = state.dictionaryLookup, onDismiss = viewModel::dismissDictionary)
 
     Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         when {

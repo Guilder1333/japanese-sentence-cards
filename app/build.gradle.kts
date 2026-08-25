@@ -39,6 +39,13 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+
+    // The bundled dictionary (assets/dictionary/jmdict.db) is copied out to internal storage and
+    // opened with the plain SQLite APIs on first use - keeping it uncompressed in the APK avoids
+    // paying compression overhead on every one of those first-run copies.
+    androidResources {
+        noCompress += "db"
+    }
 }
 
 ksp {

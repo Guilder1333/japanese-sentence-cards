@@ -1,5 +1,44 @@
 # Japanese Sentences Flash Cards
 
+## Implementation status
+
+The Android app (Kotlin + Jetpack Compose + Room) implements most of what's described below.
+This section is the quick reference for what's actually built - see `ASSUMPTIONS.md` for the
+specific interpretation behind anything left ambiguous below, and `THIRD_PARTY_NOTICES.md` for
+the bundled dictionary's licensing.
+
+**Done**
+- Known kanji/words database with all 8 metrics below (Room `WordEntity`).
+- Flash card + sentence storage as specced (`SentenceEntity`, `SentenceToken`).
+- Structured sentence import (bulk JSON) - new kanji/words default not-learned, hiragana/katakana
+  aren't tracked, per the rule below.
+- Priority queue (highest/medium/easy/backlog), including "twice in a row demotes a level" and
+  "don't jump the queue mid-pass".
+- Review UI: flip card, word 4-direction menu (know/learn/hide furigana/dictionary) via a
+  flick-keyboard-style press-and-hold gesture, word-status coloring (green known / red to-learn /
+  blue this card's main words).
+- Quiz after "Learned": reading-only multiple-choice for every main word, one round per Learned
+  press, success/fail metrics, sentence fully learned once every main word passes.
+- Word/kanji browser ("Words to learn") - the internal tracked-words table.
+- **Dictionary** - further along than the TODO below suggests: an offline JMdict-derived SQLite
+  dictionary (~218k entries) bundled with the app. The word menu's "Up"/tap action looks a word up
+  in it; a dedicated Dictionary tab searches the whole thing and can add any result into the
+  internal words database as known / to-learn / hide-furigana.
+
+**Partial**
+- Knowledge-level formula: placeholder only, per the TODO below (`data/knowledge/KnowledgeLevel.kt`).
+- Quiz meaning: only reading is quizzed so far - extracting meaning from a sentence automatically
+  isn't straightforward yet, so that half of "quiz answering which reading and meaning" is deferred.
+
+**Not yet done**
+- Plain-text sentence import (the parsing script adapted from the Anki Python script) - only
+  already-structured JSON import exists.
+- The "adding word to learn" sentence-selection algorithm (percentage-of-known-words scoring) -
+  cards currently surface by queue priority only, not by how many of their words are already known.
+- Sentence full-text search / browsing screen - intentionally skipped for now.
+- JLPT base-level defaults (N4/N5 auto-known), from the Notes section.
+- Any in-app settings screen.
+
 ## Main features
 
 ### Maintain list of known kanji/words

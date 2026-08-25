@@ -51,7 +51,7 @@ fun FlickMenu(word: WordEntity, highlighted: WordDirection?) {
                 alignment = Alignment.TopCenter,
                 active = highlighted == WordDirection.UP,
                 activeColor = MaterialTheme.colorScheme.secondary,
-                contentDescription = "Dictionary (TODO)",
+                contentDescription = "Dictionary",
             ) { tint -> Icon(Icons.AutoMirrored.Filled.MenuBook, contentDescription = null, tint = tint) }
             DirectionSlot(
                 alignment = Alignment.BottomCenter,

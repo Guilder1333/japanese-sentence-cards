@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.griboedov.sentencecards.data.db.SentenceEntity
 import com.griboedov.sentencecards.data.db.WordEntity
+import com.griboedov.sentencecards.data.dictionary.DictionaryEntry
+import com.griboedov.sentencecards.data.dictionary.DictionaryRepository
 import com.griboedov.sentencecards.data.queue.QueueEngine
 import com.griboedov.sentencecards.data.queue.ReviewAction
 import com.griboedov.sentencecards.data.queue.applyQuizResult
@@ -20,6 +22,14 @@ import kotlinx.coroutines.launch
 
 enum class WordDirection { RIGHT, LEFT, DOWN, UP }
 
+/** State of the "Up" 4-direction menu action - dictionary lookup. */
+sealed interface DictionaryLookup {
+    data object Hidden : DictionaryLookup
+    data class Loading(val word: String) : DictionaryLookup
+    data class Loaded(val word: String, val entries: List<DictionaryEntry>) : DictionaryLookup
+    data class Failed(val word: String, val message: String) : DictionaryLookup
+}
+
 data class ReviewUiState(
     val card: SentenceEntity? = null,
     /** Words referenced by the current card's structure, keyed by word id. */
@@ -31,6 +41,7 @@ data class ReviewUiState(
     val quizOptions: Map<Long, List<String>> = emptyMap(),
     /** wordId -> the option picked so far this round. */
     val quizAnswers: Map<Long, String> = emptyMap(),
+    val dictionaryLookup: DictionaryLookup = DictionaryLookup.Hidden,
 ) {
     val quizAllAnswered: Boolean
         get() = quizOptions.keys.isNotEmpty() && quizOptions.keys.all { it in quizAnswers }
@@ -38,8 +49,9 @@ data class ReviewUiState(
 
 /**
  * Drives the flash-card review screen: which card is showing, the priority queue that picks it
- * (see [QueueEngine]), the front/back flip, the word 4-direction menu, and the "special kind of
- * flash card" reading quiz that follows marking a sentence Learned.
+ * (see [QueueEngine]), the front/back flip, the word 4-direction menu (including the "Up"
+ * dictionary lookup, via [DictionaryRepository]), and the "special kind of flash card" reading
+ * quiz that follows marking a sentence Learned.
  *
  * Not reactive/pure end-to-end on purpose: [QueueEngine] carries its own pass state, so the
  * currently-pinned card ([currentCardId]) is tracked imperatively and only re-derived when it
@@ -48,6 +60,7 @@ data class ReviewUiState(
 class ReviewViewModel(
     private val sentenceRepository: SentenceRepository,
     private val wordRepository: WordRepository,
+    private val dictionaryRepository: DictionaryRepository,
 ) : ViewModel() {
     private val queueEngine = QueueEngine()
 
@@ -153,19 +166,36 @@ class ReviewViewModel(
         }
     }
 
+    /** Tap and the "Up" flick direction do the same thing - see [lookupDictionary]. */
     fun onWordTapped(wordId: Long) {
         viewModelScope.launch { wordRepository.recordTranslationShown(wordId) }
+        lookupDictionary(wordId)
     }
 
     fun onWordDirection(wordId: Long, direction: WordDirection) {
-        viewModelScope.launch {
-            when (direction) {
-                WordDirection.RIGHT -> wordRepository.markKnown(wordId)
-                WordDirection.LEFT -> wordRepository.markToLearn(wordId)
-                WordDirection.DOWN -> wordRepository.hideFurigana(wordId)
-                WordDirection.UP -> Unit // dictionary lookup: TODO per README
-            }
+        when (direction) {
+            WordDirection.RIGHT -> viewModelScope.launch { wordRepository.markKnown(wordId) }
+            WordDirection.LEFT -> viewModelScope.launch { wordRepository.markToLearn(wordId) }
+            WordDirection.DOWN -> viewModelScope.launch { wordRepository.hideFurigana(wordId) }
+            WordDirection.UP -> lookupDictionary(wordId)
         }
+    }
+
+    private fun lookupDictionary(wordId: Long) {
+        val word = allWords[wordId] ?: return
+        _uiState.update { it.copy(dictionaryLookup = DictionaryLookup.Loading(word.word)) }
+        viewModelScope.launch {
+            val result = try {
+                DictionaryLookup.Loaded(word.word, dictionaryRepository.lookup(kanji = word.word, kana = word.furigana))
+            } catch (e: Exception) {
+                DictionaryLookup.Failed(word.word, e.message ?: e::class.simpleName ?: "Lookup failed")
+            }
+            _uiState.update { it.copy(dictionaryLookup = result) }
+        }
+    }
+
+    fun dismissDictionary() {
+        _uiState.update { it.copy(dictionaryLookup = DictionaryLookup.Hidden) }
     }
 
     /** Records (but doesn't yet grade) the chosen reading for one quiz word - locked in once picked. */

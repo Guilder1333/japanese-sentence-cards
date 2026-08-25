@@ -17,6 +17,9 @@ interface WordDao {
     @Query("SELECT * FROM words WHERE id IN (:ids)")
     suspend fun getByIds(ids: List<Long>): List<WordEntity>
 
+    @Query("SELECT * FROM words WHERE word = :word LIMIT 1")
+    suspend fun findByWord(word: String): WordEntity?
+
     @Upsert
     suspend fun upsert(word: WordEntity)
 

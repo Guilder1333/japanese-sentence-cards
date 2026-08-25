@@ -2,6 +2,7 @@ package com.griboedov.sentencecards
 
 import android.app.Application
 import com.griboedov.sentencecards.data.db.AppDatabase
+import com.griboedov.sentencecards.data.dictionary.DictionaryRepository
 import com.griboedov.sentencecards.data.importer.SentenceImporter
 import com.griboedov.sentencecards.data.repository.SentenceRepository
 import com.griboedov.sentencecards.data.repository.WordRepository
@@ -26,6 +27,8 @@ class SentenceCardsApp : Application() {
         private set
     lateinit var importer: SentenceImporter
         private set
+    lateinit var dictionaryRepository: DictionaryRepository
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -33,6 +36,7 @@ class SentenceCardsApp : Application() {
         wordRepository = WordRepository(database.wordDao())
         sentenceRepository = SentenceRepository(database.sentenceDao())
         importer = SentenceImporter(database.wordDao(), database.sentenceDao())
+        dictionaryRepository = DictionaryRepository(this)
 
         appScope.launch {
             if (sentenceRepository.count() == 0) {
