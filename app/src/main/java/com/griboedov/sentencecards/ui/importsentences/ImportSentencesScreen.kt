@@ -1,5 +1,7 @@
 package com.griboedov.sentencecards.ui.importsentences
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -49,10 +52,14 @@ private const val SAMPLE_IMPORT_JSON = """[
 /**
  * Bulk import of already-structured sentences (README JSON schema). Plain-text import via the
  * adapted parsing script is a later addition - this screen only accepts the structured form.
+ *
+ * Two ways in: pick a JSON file (the expected path once these get into the megabytes - too big to
+ * comfortably paste), or paste a small one directly for quick tests.
  */
 @Composable
 fun ImportSentencesScreen(modifier: Modifier = Modifier) {
-    val app = LocalContext.current.applicationContext as SentenceCardsApp
+    val context = LocalContext.current
+    val app = context.applicationContext as SentenceCardsApp
     val viewModel: ImportViewModel = viewModel(
         factory = viewModelFactory {
             initializer { ImportViewModel(app.importer) }
@@ -62,16 +69,36 @@ fun ImportSentencesScreen(modifier: Modifier = Modifier) {
     val resultMessage by viewModel.resultMessage.collectAsStateWithLifecycle()
     var text by remember { mutableStateOf("") }
 
+    val filePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) viewModel.importFromFile(context, uri)
+    }
+
     Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
         Text(
-            text = "Paste a JSON array of already-structured sentences to import them in bulk. " +
-                "Plain-text import (auto-parsing) is coming later.",
+            text = "Import a JSON file of already-structured sentences, or paste a small one " +
+                "below. Plain-text import (auto-parsing) is coming later.",
             style = MaterialTheme.typography.bodyMedium,
         )
+
+        Button(
+            onClick = { filePicker.launch(arrayOf("*/*")) },
+            enabled = !isImporting,
+            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+        ) {
+            if (isImporting) {
+                CircularProgressIndicator(modifier = Modifier.size(20.dp))
+            } else {
+                Text("Import from file...")
+            }
+        }
+
+        HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+        Text("Or paste JSON directly (for small tests):", style = MaterialTheme.typography.labelMedium)
+
         OutlinedTextField(
             value = text,
             onValueChange = { text = it },
-            modifier = Modifier.fillMaxWidth().height(320.dp).padding(top = 12.dp),
+            modifier = Modifier.fillMaxWidth().height(240.dp).padding(top = 8.dp),
             label = { Text("Structured sentences JSON") },
             textStyle = MaterialTheme.typography.bodySmall.copy(fontFamily = FontFamily.Monospace),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.None),
@@ -91,11 +118,7 @@ fun ImportSentencesScreen(modifier: Modifier = Modifier) {
                 enabled = text.isNotBlank() && !isImporting,
                 modifier = Modifier.weight(1f),
             ) {
-                if (isImporting) {
-                    CircularProgressIndicator(modifier = Modifier.size(20.dp))
-                } else {
-                    Text("Import")
-                }
+                Text("Import pasted text")
             }
         }
 

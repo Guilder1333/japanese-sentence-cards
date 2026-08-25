@@ -10,10 +10,15 @@ rather than silent guessing.
   marked - swap the formula whenever a real one is defined; nothing else depends on it.
 
 - **New word defaults** (`data/importer/StructuredImport.kt`): a brand-new kanji/word from import
-  gets `forceFurigana = true`, `toLearn = false`. This is how "furigana shown by default for any
-  new kanji/word not present in database" (README metrics section) is reconciled with "front only
-  shows furigana for force-furigana words" (README UI section) - new words are force-furigana by
-  default, which fades once you mark them known.
+  gets `forceFurigana = true` (shows furigana until confirmed known - reconciling "furigana shown
+  by default for any new kanji/word" from the README's metrics section with "front only shows
+  furigana for force-furigana words" from its UI section) and `toLearn = true`. That second part
+  isn't the README's literal "new words are considered false" default - per your clarification,
+  every word the current importer creates is also one of its sentence's main words, and a main
+  word is by definition a to-learn target (that's why the sentence exists), so it should start
+  flagged that way rather than looking indistinguishable from a confirmed-known word. "Known" now
+  means the app is simply aware of a word (it's tracked, with translation/furigana); "to learn" is
+  the explicit learning-target flag - two different things, not opposite ends of one flag.
 
 - **4-direction menu effects** (`data/repository/WordRepository.kt`): right (know) clears both
   `toLearn` and `forceFurigana`; left (learn) sets both `toLearn` and `forceFurigana`; down hides
@@ -74,6 +79,13 @@ rather than silent guessing.
   verbatim, `text` optional (derived from `structure` if omitted). Only the "already structured"
   import path exists yet, per your note that plain-text import needs the adapted parsing script
   later.
+
+- **Import from file** (`ui/importsentences/`): the primary import path is now a system file
+  picker (`ActivityResultContracts.OpenDocument`, accepting any file type since not every picker
+  tags `.json` files with a matching MIME type) that reads the file directly, since structured
+  JSON files are expected to reach the megabytes - too large to comfortably paste, and too large
+  to dump into an editable text field besides (Compose's text field gets sluggish with very large
+  editable content). The paste box is kept as a secondary path for quick/small manual tests.
 
 - **Word ids on import**: if a structure token omits `id` for a `kind: 1` (word) token, one is
   assigned (`max known id + 1`). If a `kind: 1` token's `id` already exists in the database, the

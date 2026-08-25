@@ -111,6 +111,11 @@ class ReviewViewModel(
                     else -> buildQuizOptions(card)
                 },
                 quizAnswers = if (sameCard) prev.quizAnswers else emptyMap(),
+                // Rebuilt from scratch on every sentences/words change (e.g. any metric write,
+                // including the one this very dialog's word-tap triggers) - without carrying this
+                // forward, an open dictionary dialog would get silently reset to Hidden right
+                // after opening.
+                dictionaryLookup = if (sameCard) prev.dictionaryLookup else DictionaryLookup.Hidden,
             )
         }
 

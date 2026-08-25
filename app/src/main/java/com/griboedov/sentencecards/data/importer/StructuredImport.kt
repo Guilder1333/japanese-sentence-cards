@@ -70,7 +70,10 @@ class SentenceImporter(
                     resolvedTokens += token
                     continue
                 }
-                // New words (not yet in the database) are assumed not-yet-learned, per README.
+                // Every kind-1 token here becomes one of this sentence's main words below, and a
+                // sentence's main words are, by definition, words it exists to teach - so a newly
+                // created word always starts as an explicit to-learn target (toLearn = true), not
+                // just something the app happens to now be aware of.
                 val id = token.id ?: nextWordId++
                 val alreadyKnown = wordDao.getById(id) != null || newWords.any { it.id == id }
                 if (!alreadyKnown) {
@@ -79,6 +82,7 @@ class SentenceImporter(
                         word = token.word,
                         furigana = token.furigana,
                         translation = token.translation,
+                        toLearn = true,
                     )
                 }
                 mainWordIds += id
