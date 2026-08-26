@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.griboedov.sentencecards.data.importer.BookImporter
 import com.griboedov.sentencecards.data.importer.ImportResult
 import com.griboedov.sentencecards.data.importer.SentenceImporter
 import kotlinx.coroutines.Dispatchers
@@ -13,23 +14,16 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-class ImportViewModel(private val importer: SentenceImporter) : ViewModel() {
+class ImportViewModel(
+    private val importer: SentenceImporter,
+    private val bookImporter: BookImporter,
+) : ViewModel() {
 
     private val _isImporting = MutableStateFlow(false)
     val isImporting: StateFlow<Boolean> = _isImporting.asStateFlow()
 
     private val _resultMessage = MutableStateFlow<String?>(null)
     val resultMessage: StateFlow<String?> = _resultMessage.asStateFlow()
-
-    /** Pasted-JSON path, used by the sample loader and the (small-scale) text box. */
-    fun import(rawJson: String) {
-        if (_isImporting.value) return
-        viewModelScope.launch {
-            _isImporting.value = true
-            applyResult(importer.importJson(rawJson))
-            _isImporting.value = false
-        }
-    }
 
     /**
      * File-picker path: structured JSON files are expected to get into the hundreds of megabytes
@@ -51,6 +45,27 @@ class ImportViewModel(private val importer: SentenceImporter) : ViewModel() {
                     // even though importStream is specifically designed to avoid hitting one.
                     ImportResult.Failure(e.message ?: "Could not read the selected file.")
                 }
+            }
+            applyResult(result)
+            _isImporting.value = false
+        }
+    }
+
+    /**
+     * Plain-text book import: picks a `.txt` file straight up (not already-structured JSON) and
+     * runs the same sentence-splitting/tokenizing/tagging tools/import_book.py does, on-device -
+     * see [BookImporter]. This can take a while for a whole book (tokenizing plus a dictionary
+     * lookup per distinct word), so it shares the same busy/result state as the JSON path.
+     */
+    fun importBookFromFile(context: Context, uri: Uri) {
+        if (_isImporting.value) return
+        viewModelScope.launch {
+            _isImporting.value = true
+            val result = try {
+                bookImporter.importFile(context, uri)
+            } catch (e: Throwable) {
+                // Same broad-catch reasoning as importFromFile above.
+                ImportResult.Failure(e.message ?: "Could not read the selected file.")
             }
             applyResult(result)
             _isImporting.value = false

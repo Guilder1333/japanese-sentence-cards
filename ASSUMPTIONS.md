@@ -95,16 +95,48 @@ rather than silent guessing.
 
 - **Bulk import JSON shape** (`data/importer/StructuredImport.kt`): an array of
   `{ text?, translation, structure }` objects, `structure` matching the README's schema
-  verbatim, `text` optional (derived from `structure` if omitted). Only the "already structured"
-  import path exists yet, per your note that plain-text import needs the adapted parsing script
-  later.
+  verbatim, `text` optional (derived from `structure` if omitted).
 
-- **Import from file** (`ui/importsentences/`): the primary import path is now a system file
-  picker (`ActivityResultContracts.OpenDocument`, accepting any file type since not every picker
-  tags `.json` files with a matching MIME type) that reads the file directly, since structured
+- **Import from file** (`ui/importsentences/`): import is file-only - a system file picker
+  (`ActivityResultContracts.OpenDocument`, accepting any file type since not every picker tags
+  `.json`/`.txt` files with a matching MIME type) that reads the file directly, since structured
   JSON files are expected to reach the megabytes - too large to comfortably paste, and too large
   to dump into an editable text field besides (Compose's text field gets sluggish with very large
-  editable content). The paste box is kept as a secondary path for quick/small manual tests.
+  editable content). An earlier paste-a-small-JSON-directly box was removed per your note that
+  it was redundant now that file import covers every case.
+
+- **Plain-text book import** (`data/importer/BookImporter.kt`, `BookText.kt`): the in-app
+  equivalent of `tools/import_book.py`, for when running that script isn't an option. Decisions
+  that don't have a python-script counterpart to copy from:
+  - **Tokenizer**: Kuromoji's IPADIC tokenizer (`com.atilika.kuromoji:kuromoji-ipadic`), not
+    fugashi/UniDic - it's pure Kotlin/Java (no native code, no network access, works entirely
+    on-device) at the cost of segmenting slightly differently than the script in edge cases, since
+    IPADIC and UniDic are different dictionaries. Its per-token `surface`/`baseForm`/`reading` map
+    directly onto the script's fugashi `surface`/`orthBase`/`kana`. The dictionary ships as ~28MB
+    of resources bundled inside the kuromoji jars (loaded via classpath resource lookup, not
+    Android assets) - a real APK size cost, accepted as the price of not needing Python at all.
+  - **Word id assignment**: kept deliberately simple and consistent with how the structured-JSON
+    path already behaves (`SentenceImporter.importSentences`) - a word id is only ever reused
+    *within one import run* (same dictionary-form token seen again in the same book), via an
+    in-memory map, exactly like the script's `stable_word_id` hash trick achieves for its own
+    single run. This does *not* check the DB for a pre-existing word with the same text, so
+    importing two books (or a book and previously-imported JSON) with overlapping vocabulary
+    creates a separate `WordEntity` per import for words not already id-linked - matching the
+    existing (JSON) import's behavior rather than introducing new cross-import dedup logic.
+  - **Dictionary glosses**: reuses the bundled JMdict `DictionaryRepository` used by the Dictionary
+    tab, first-gloss-of-first-sense extraction ported verbatim from the script's parsing. Simpler
+    than the script's lookup: it doesn't specifically try kanji+kana together first, so distinct
+    homographs sharing a kanji spelling (e.g. 本 "book" vs. "origin") can occasionally get the
+    wrong gloss - same class of limitation as the script, just via a slightly less precise query.
+  - **Whole-file-in-memory**: unlike `importStream`'s element-by-element JSON streaming (built for
+    pre-structured datasets that can run into the hundreds of MB), book import reads the entire
+    input file into memory up front. Plain-text book files are orders of magnitude smaller than
+    their structured-JSON output, so this is fine for a single book; concatenating many books into
+    one giant text file should still go through the script + JSON import instead.
+  - **No exposed CLI-equivalent knobs**: `BookImportOptions` mirrors the script's filter defaults
+    (min 2 chars, min 50% Japanese-script ratio, dedupe exact-duplicate sentences, split multi-
+    sentence quotes) but the UI doesn't expose them - no settings screen exists yet (see README's
+    "Not yet done"), so tune `BookImportOptions`'s defaults directly if they need to change.
 
 - **Sentences vs. cards split** (`data/db/SentenceEntity.kt`, `CardEntity.kt`, `SentenceWordCrossRef.kt`,
   `data/cards/`): per your clarification, `sentences` is just the raw imported pool (can be

@@ -43,6 +43,9 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            // kuromoji-ipadic and its kuromoji-core dependency both ship the same project-level
+            // META-INF docs (CONTRIBUTORS.md etc.) - identical either way, so just keep one copy.
+            excludes += "/META-INF/{CONTRIBUTORS.md,LICENSE.md,NOTICE.md}"
         }
     }
 
@@ -78,6 +81,12 @@ dependencies {
     ksp("androidx.room:room-compiler:2.8.4")
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
+
+    // On-device Japanese morphological tokenizer for the plain-text book import path
+    // (data/importer/BookImporter.kt) - pure Java/Kotlin, bundles the IPADIC dictionary, no
+    // native code or network access needed. Mirrors what tools/import_book.py does offline with
+    // fugashi/unidic-lite, so the app can do the same job when running that script isn't an option.
+    implementation("com.atilika.kuromoji:kuromoji-ipadic:0.9.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
     debugImplementation("androidx.compose.ui:ui-test-manifest")

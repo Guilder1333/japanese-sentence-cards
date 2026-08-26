@@ -41,6 +41,10 @@ the bundled dictionary's licensing.
   dictionary (~218k entries) bundled with the app. The word menu's "Up"/tap action looks a word up
   in it; a dedicated Dictionary tab searches the whole thing and can add any result into the
   internal words database as known / to-learn / force-furigana.
+- Plain-text book import in-app (`data/importer/BookImporter.kt`) - the same job
+  `tools/import_book.py` does offline (sentence splitting, tokenizing/tagging, per-word dictionary
+  glosses), but on-device via the bundled Kuromoji IPADIC tokenizer, for when running the Python
+  script isn't an option. Reuses the same batched DB-write path as the structured-JSON import.
 
 **Partial**
 - Knowledge-level formula: placeholder only, per the TODO below (`data/knowledge/KnowledgeLevel.kt`).
@@ -48,8 +52,6 @@ the bundled dictionary's licensing.
   isn't straightforward yet, so that half of "quiz answering which reading and meaning" is deferred.
 
 **Not yet done**
-- Plain-text sentence import (the parsing script adapted from the Anki Python script) - only
-  already-structured JSON import exists in-app (`tools/import_book.py` produces the JSON offline).
 - Sentence full-text search / browsing screen - intentionally skipped for now.
 - JLPT base-level defaults (N4/N5 auto-known), from the Notes section.
 - Any in-app settings screen.

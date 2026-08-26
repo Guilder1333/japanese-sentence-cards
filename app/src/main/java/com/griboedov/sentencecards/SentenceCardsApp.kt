@@ -5,6 +5,7 @@ import android.util.Log
 import com.griboedov.sentencecards.data.cards.CardGenerator
 import com.griboedov.sentencecards.data.db.AppDatabase
 import com.griboedov.sentencecards.data.dictionary.DictionaryRepository
+import com.griboedov.sentencecards.data.importer.BookImporter
 import com.griboedov.sentencecards.data.importer.SentenceImporter
 import com.griboedov.sentencecards.data.repository.CardRepository
 import com.griboedov.sentencecards.data.repository.SentenceRepository
@@ -33,6 +34,8 @@ class SentenceCardsApp : Application() {
         private set
     lateinit var importer: SentenceImporter
         private set
+    lateinit var bookImporter: BookImporter
+        private set
     lateinit var dictionaryRepository: DictionaryRepository
         private set
 
@@ -57,6 +60,7 @@ class SentenceCardsApp : Application() {
         cardRepository = CardRepository(database.cardDao())
         importer = SentenceImporter(database.wordDao(), database.sentenceDao())
         dictionaryRepository = DictionaryRepository(this)
+        bookImporter = BookImporter(database.wordDao(), dictionaryRepository, importer)
 
         appScope.launch {
             if (sentenceRepository.count() == 0) {

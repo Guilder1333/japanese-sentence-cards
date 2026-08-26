@@ -54,14 +54,16 @@ sealed interface ImportResult {
  * [com.griboedov.sentencecards.data.cards.CardGenerator] for how sentences later become cards,
  * once a word they contain is marked to-learn.
  *
- * Two entry points:
- *  - [importJson] - the whole JSON already in memory as a String (the paste-box path; fine for
- *    small/manual tests).
+ * Entry points:
+ *  - [importJson] - the whole JSON already in memory as a String (used for seeding built-in data).
  *  - [importStream] - the file-picker path, for files that can run into the hundreds of megabytes
  *    (a whole book). Streams the JSON array element-by-element straight off the [InputStream]
  *    instead of first reading it into one giant String, and [importSentences] writes it to the DB
  *    in fixed-size batches instead of collecting the whole parsed array into one giant List -
  *    peak memory stays roughly constant no matter how large the file is.
+ *  - [importParsed] - [ImportSentence]s already built in memory by
+ *    [com.griboedov.sentencecards.data.importer.BookImporter] (the plain-text book import path)
+ *    rather than deserialized from JSON, but written via the exact same batched DB-write core.
  */
 class SentenceImporter(
     private val wordDao: WordDao,
@@ -84,6 +86,8 @@ class SentenceImporter(
     } catch (e: Exception) {
         ImportResult.Failure(e.message ?: "Could not parse JSON")
     }
+
+    suspend fun importParsed(sentences: Sequence<ImportSentence>): ImportResult = importSentences(sentences)
 
     /**
      * Shared batch-processing core. [sentences] is consumed lazily in [batchSize]-sized chunks -
