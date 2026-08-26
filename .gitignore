@@ -23,3 +23,5 @@ build/
 .gradle/
 /tools/jmdict-*.json
 /app/src/main/assets/dictionary/jmdict.db
+
+example.txt

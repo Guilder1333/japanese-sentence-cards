@@ -1,6 +1,7 @@
 package com.griboedov.sentencecards
 
 import android.app.Application
+import android.util.Log
 import com.griboedov.sentencecards.data.cards.CardGenerator
 import com.griboedov.sentencecards.data.db.AppDatabase
 import com.griboedov.sentencecards.data.dictionary.DictionaryRepository
@@ -9,6 +10,7 @@ import com.griboedov.sentencecards.data.repository.CardRepository
 import com.griboedov.sentencecards.data.repository.SentenceRepository
 import com.griboedov.sentencecards.data.repository.WordRepository
 import com.griboedov.sentencecards.data.seed.SeedData
+import com.griboedov.sentencecards.data.translation.DeepLTranslator
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -37,7 +39,19 @@ class SentenceCardsApp : Application() {
     override fun onCreate() {
         super.onCreate()
         database = AppDatabase.getInstance(this)
-        val cardGenerator = CardGenerator(database.sentenceDao(), database.cardDao(), database.wordDao())
+        // Logged unconditionally at startup (rather than only on first failed translate call) so
+        // "translation isn't showing up" is diagnosable without needing to reproduce a card
+        // generation first - filter logcat for tag "SentenceCardsApp" to check it.
+        Log.i(
+            "SentenceCardsApp",
+            if (BuildConfig.DEEPL_API_KEY.isBlank()) {
+                "DeepL translation disabled: DEEPL_API_KEY was empty/unset when this build was compiled"
+            } else {
+                "DeepL translation enabled (key ends with '${BuildConfig.DEEPL_API_KEY.takeLast(4)}')"
+            },
+        )
+        val translator = DeepLTranslator(BuildConfig.DEEPL_API_KEY)
+        val cardGenerator = CardGenerator(database.sentenceDao(), database.cardDao(), database.wordDao(), translator)
         wordRepository = WordRepository(database.wordDao(), cardGenerator)
         sentenceRepository = SentenceRepository(database.sentenceDao())
         cardRepository = CardRepository(database.cardDao())

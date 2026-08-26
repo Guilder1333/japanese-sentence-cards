@@ -9,6 +9,7 @@ import com.griboedov.sentencecards.data.db.SentenceToken
 import com.griboedov.sentencecards.data.db.SentenceWordCrossRef
 import com.griboedov.sentencecards.data.db.WordDao
 import com.griboedov.sentencecards.data.db.WordEntity
+import com.griboedov.sentencecards.data.translation.Translator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.runBlocking
@@ -18,15 +19,27 @@ import org.junit.Test
 
 /** In-memory fakes so [CardGenerator]'s DB orchestration can be unit tested without Room/Robolectric. */
 private class FakeSentenceDao(sentences: List<SentenceEntity>, wordRefs: List<SentenceWordCrossRef>) : SentenceDao {
-    private val byId = sentences.associateBy { it.id }
+    val byId = sentences.associateBy { it.id }.toMutableMap()
     private val refs = wordRefs
 
-    override suspend fun upsertAll(sentences: List<SentenceEntity>): List<Long> = error("not needed")
+    override suspend fun upsertAll(sentences: List<SentenceEntity>): List<Long> {
+        for (sentence in sentences) byId[sentence.id] = sentence
+        return sentences.map { it.id }
+    }
     override suspend fun getByIds(ids: List<Long>): List<SentenceEntity> = ids.mapNotNull { byId[it] }
     override suspend fun count(): Int = byId.size
     override suspend fun insertWordRefs(refs: List<SentenceWordCrossRef>) = error("not needed")
     override suspend fun sentenceIdsContaining(wordId: Long): List<Long> =
         refs.filter { it.wordId == wordId }.map { it.sentenceId }
+}
+
+/** Records every sentence text it's asked to translate, and returns a fixed canned translation. */
+private class FakeTranslator(private val result: String? = "translated") : Translator {
+    val requested = mutableListOf<String>()
+    override suspend fun translate(text: String): String? {
+        requested += text
+        return result
+    }
 }
 
 private class FakeCardDao(initial: List<CardEntity> = emptyList()) : CardDao {
@@ -74,18 +87,24 @@ private class FakeWordDao(words: List<WordEntity>) : WordDao {
 
 private fun wordToken(id: Long) = SentenceToken(word = "w$id", translation = "", kind = 1, id = id)
 
-private fun sentence(id: Long, vararg wordIds: Long) = SentenceEntity(
+private fun sentence(id: Long, vararg wordIds: Long, translation: String = "translation$id") = SentenceEntity(
     id = id,
     text = "text$id",
-    translation = "translation$id",
+    translation = translation,
     structure = wordIds.map { wordToken(it) },
 )
 
-private fun card(id: Long, sentenceId: Long, mainWordIds: List<Long>, learned: Boolean = false) = CardEntity(
+private fun card(
+    id: Long,
+    sentenceId: Long,
+    mainWordIds: List<Long>,
+    learned: Boolean = false,
+    translation: String = "translation$sentenceId",
+) = CardEntity(
     id = id,
     sentenceId = sentenceId,
     text = "text$sentenceId",
-    translation = "translation$sentenceId",
+    translation = translation,
     structure = listOf(wordToken(mainWordIds.first())),
     mainWordIds = mainWordIds,
     learned = learned,
@@ -170,5 +189,66 @@ class CardGeneratorTest {
         // All 3 existing cards get the word added, but sentence 4 never gets a card - already at the cap.
         assertEquals(3, cardDao.cards.size)
         assertTrue(cardDao.cards.all { 100L in it.mainWordIds })
+    }
+
+    @Test
+    fun `translates an untranslated sentence when it's picked for a new card, and persists it back to the pool`() = runBlocking {
+        val sentences = listOf(sentence(1, 100L, translation = ""))
+        val refs = listOf(SentenceWordCrossRef(sentenceId = 1L, wordId = 100L))
+        val sentenceDao = FakeSentenceDao(sentences, refs)
+        val cardDao = FakeCardDao()
+        val translator = FakeTranslator(result = "translated1")
+        val generator = CardGenerator(sentenceDao, cardDao, FakeWordDao(emptyList()), translator)
+
+        generator.generateCardsForWord(100L)
+
+        assertEquals(listOf("text1"), translator.requested)
+        assertEquals("translated1", cardDao.cards.single().translation)
+        assertEquals("translated1", sentenceDao.byId.getValue(1L).translation)
+    }
+
+    @Test
+    fun `does not call the translator for a sentence that already has a translation`() = runBlocking {
+        val sentences = listOf(sentence(1, 100L, translation = "already translated"))
+        val refs = listOf(SentenceWordCrossRef(sentenceId = 1L, wordId = 100L))
+        val cardDao = FakeCardDao()
+        val translator = FakeTranslator()
+        val generator = CardGenerator(FakeSentenceDao(sentences, refs), cardDao, FakeWordDao(emptyList()), translator)
+
+        generator.generateCardsForWord(100L)
+
+        assertTrue(translator.requested.isEmpty())
+        assertEquals("already translated", cardDao.cards.single().translation)
+    }
+
+    @Test
+    fun `leaves the card's translation blank if the translator can't produce one`() = runBlocking {
+        val sentences = listOf(sentence(1, 100L, translation = ""))
+        val refs = listOf(SentenceWordCrossRef(sentenceId = 1L, wordId = 100L))
+        val cardDao = FakeCardDao()
+        val translator = FakeTranslator(result = null)
+        val generator = CardGenerator(FakeSentenceDao(sentences, refs), cardDao, FakeWordDao(emptyList()), translator)
+
+        generator.generateCardsForWord(100L)
+
+        assertEquals("", cardDao.cards.single().translation)
+    }
+
+    @Test
+    fun `backfills translation on a reused card that was created before it had one`() = runBlocking {
+        val sentences = listOf(sentence(1, 100L, translation = ""))
+        val refs = listOf(SentenceWordCrossRef(sentenceId = 1L, wordId = 100L))
+        val sentenceDao = FakeSentenceDao(sentences, refs)
+        // Existing card for sentence 1 (teaching a different word) predates translation - blank.
+        val cardDao = FakeCardDao(listOf(card(id = 1L, sentenceId = 1L, mainWordIds = listOf(200L), translation = "")))
+        val translator = FakeTranslator(result = "translated1")
+        val generator = CardGenerator(sentenceDao, cardDao, FakeWordDao(emptyList()), translator)
+
+        generator.generateCardsForWord(100L)
+
+        val reused = cardDao.cards.single()
+        assertEquals(listOf(200L, 100L), reused.mainWordIds)
+        assertEquals("translated1", reused.translation)
+        assertEquals("translated1", sentenceDao.byId.getValue(1L).translation)
     }
 }

@@ -16,6 +16,11 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
+
+        // Sentence translation (see data/translation/DeepLTranslator.kt) needs a DeepL API key.
+        // Supplied via an env var at build time - never committed to source - and left "" (i.e.
+        // translation quietly disabled, see NoOpTranslator) when not set, e.g. for local dev.
+        buildConfigField("String", "DEEPL_API_KEY", "\"${System.getenv("DEEPL_API_KEY").orEmpty()}\"")
     }
 
     buildTypes {
@@ -32,6 +37,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     packaging {
