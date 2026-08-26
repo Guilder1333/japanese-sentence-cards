@@ -22,9 +22,14 @@ data class WordEntity(
     val timesFuriganaShown: Int = 0,
     val timesTranslationShown: Int = 0,
     val toLearn: Boolean = false,
-    val hideFurigana: Boolean = false,
-    /** Forces furigana to show even on the front of the card. Defaults on for brand-new words. */
-    val forceFurigana: Boolean = true,
+    /**
+     * Whether furigana shows on the front of the card. Off by default for every word, including
+     * brand-new ones - front furigana is opt-in, only ever turned on by an explicit "force
+     * furigana" action (word browser / dictionary, or the 4-direction menu's down flick). Marking
+     * known ([com.griboedov.sentencecards.data.repository.WordRepository.markKnown]) and a correct
+     * quiz answer both clear it, in case it had been forced on.
+     */
+    val forceFurigana: Boolean = false,
     val quizSuccess: Int = 0,
     val quizFails: Int = 0,
 )

@@ -118,10 +118,11 @@ private fun CardFront(card: CardEntity, words: Map<Long, WordEntity>) {
         for (token in card.structure) {
             val word = token.id?.let { words[it] }
             val isMainWord = token.id != null && token.id in card.mainWordIds
-            // Front furigana rule: only for words still needing the crutch (forceFurigana, e.g.
-            // not yet confirmed known) - and never for this sentence's main/quizzed words, since
-            // those are exactly what the reading quiz is testing recall of.
-            val showFurigana = word != null && word.forceFurigana && !word.hideFurigana && !isMainWord
+            // Front furigana rule: hidden by default, shown only for words still needing the
+            // crutch (forceFurigana - either still unconfirmed, or explicitly forced back on) -
+            // and never for this sentence's main/quizzed words, since those are exactly what the
+            // reading quiz is testing recall of.
+            val showFurigana = word != null && word.forceFurigana && !isMainWord
             TokenText(
                 token = token,
                 furigana = if (showFurigana) token.furigana else null,
@@ -147,7 +148,6 @@ private fun CardBack(
         FlowRow(horizontalArrangement = Arrangement.Center, verticalArrangement = Arrangement.Center) {
             for (token in card.structure) {
                 val word = token.id?.let { words[it] }
-                val showFurigana = word == null || !word.hideFurigana
                 val isMainWord = token.id != null && token.id in card.mainWordIds
                 val tokenModifier = if (word != null) {
                     Modifier
@@ -181,9 +181,11 @@ private fun CardBack(
                     Modifier
                 }
                 Box(modifier = tokenModifier) {
+                    // The back is the reveal side - furigana always shows here regardless of
+                    // forceFurigana, which only governs the front.
                     TokenText(
                         token = token,
-                        furigana = if (showFurigana) token.furigana else null,
+                        furigana = token.furigana,
                         color = wordStatusColor(word, isMainWord),
                     )
                 }

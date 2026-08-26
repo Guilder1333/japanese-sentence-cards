@@ -32,24 +32,27 @@ class ImportViewModel(private val importer: SentenceImporter) : ViewModel() {
     }
 
     /**
-     * File-picker path: structured JSON files are expected to get into the megabytes, too big to
-     * comfortably paste - this reads the file directly instead of routing it through the (small,
-     * editable) text box, which would otherwise have to hold the whole thing in UI state.
+     * File-picker path: structured JSON files are expected to get into the hundreds of megabytes
+     * (a whole book) - way too big to comfortably paste, or even to hold fully in memory as a
+     * String. This streams straight from the picked file into [SentenceImporter.importStream],
+     * which parses and writes to the DB in bounded-size batches instead - see its doc comment.
      */
     fun importFromFile(context: Context, uri: Uri) {
         if (_isImporting.value) return
         viewModelScope.launch {
             _isImporting.value = true
-            val content = withContext(Dispatchers.IO) {
-                runCatching {
-                    context.contentResolver.openInputStream(uri)?.bufferedReader(Charsets.UTF_8)?.use { it.readText() }
-                }.getOrNull()
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    context.contentResolver.openInputStream(uri)?.use { importer.importStream(it) }
+                        ?: ImportResult.Failure("Could not open the selected file.")
+                } catch (e: Throwable) {
+                    // Broad on purpose: an OutOfMemoryError here (not an Exception, so a plain
+                    // catch wouldn't see it) should still surface as a message, not crash the app -
+                    // even though importStream is specifically designed to avoid hitting one.
+                    ImportResult.Failure(e.message ?: "Could not read the selected file.")
+                }
             }
-            if (content == null) {
-                _resultMessage.value = "Could not read the selected file."
-            } else {
-                applyResult(importer.importJson(content))
-            }
+            applyResult(result)
             _isImporting.value = false
         }
     }

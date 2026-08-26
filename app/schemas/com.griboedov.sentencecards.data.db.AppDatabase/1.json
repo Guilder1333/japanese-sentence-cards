@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "48067214fe17c5aaed7d37d6df9ffd4d",
+    "identityHash": "c99fbe6d77dfa338b0f1860c48607543",
     "entities": [
       {
         "tableName": "words",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `word` TEXT NOT NULL, `furigana` TEXT, `translation` TEXT NOT NULL, `timesShown` INTEGER NOT NULL, `timesFuriganaShown` INTEGER NOT NULL, `timesTranslationShown` INTEGER NOT NULL, `toLearn` INTEGER NOT NULL, `hideFurigana` INTEGER NOT NULL, `forceFurigana` INTEGER NOT NULL, `quizSuccess` INTEGER NOT NULL, `quizFails` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `word` TEXT NOT NULL, `furigana` TEXT, `translation` TEXT NOT NULL, `timesShown` INTEGER NOT NULL, `timesFuriganaShown` INTEGER NOT NULL, `timesTranslationShown` INTEGER NOT NULL, `toLearn` INTEGER NOT NULL, `forceFurigana` INTEGER NOT NULL, `quizSuccess` INTEGER NOT NULL, `quizFails` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -52,12 +52,6 @@
           {
             "fieldPath": "toLearn",
             "columnName": "toLearn",
-            "affinity": "INTEGER",
-            "notNull": true
-          },
-          {
-            "fieldPath": "hideFurigana",
-            "columnName": "hideFurigana",
             "affinity": "INTEGER",
             "notNull": true
           },
@@ -245,7 +239,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '48067214fe17c5aaed7d37d6df9ffd4d')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c99fbe6d77dfa338b0f1860c48607543')"
     ]
   }
 }

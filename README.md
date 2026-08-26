@@ -8,7 +8,7 @@ specific interpretation behind anything left ambiguous below, and `THIRD_PARTY_N
 the bundled dictionary's licensing.
 
 **Done**
-- Known kanji/words database with all 8 metrics below (Room `WordEntity`).
+- Known kanji/words database with all 7 metrics below (Room `WordEntity`).
 - Sentence pool + flash card storage as two separate tables (`SentenceEntity` = raw imported
   sentences, searchable by word via a `sentence_words` index; `CardEntity` = the actual review
   cards generated from it - see below).
@@ -26,7 +26,7 @@ the bundled dictionary's licensing.
   the next-best batch instead of duplicates.
 - Priority queue (highest/medium/easy/backlog), including "twice in a row demotes a level" and
   "don't jump the queue mid-pass".
-- Review UI: flip card, word 4-direction menu (know/learn/hide furigana/dictionary) via a
+- Review UI: flip card, word 4-direction menu (know/learn/force furigana/dictionary) via a
   flick-keyboard-style press-and-hold gesture, word-status coloring (green known / red to-learn /
   blue this card's main words).
 - Quiz after "Learned": reading-only multiple-choice for every main word, one round per Learned
@@ -35,7 +35,7 @@ the bundled dictionary's licensing.
 - **Dictionary** - further along than the TODO below suggests: an offline JMdict-derived SQLite
   dictionary (~218k entries) bundled with the app. The word menu's "Up"/tap action looks a word up
   in it; a dedicated Dictionary tab searches the whole thing and can add any result into the
-  internal words database as known / to-learn / hide-furigana.
+  internal words database as known / to-learn / force-furigana.
 
 **Partial**
 - Knowledge-level formula: placeholder only, per the TODO below (`data/knowledge/KnowledgeLevel.kt`).
@@ -57,13 +57,12 @@ App should have small local database where it stores information about learned k
 
 There should be stored few metrics:
 1. Times shown - increments each time flash card with this word or kanji is shown. 
-2. Times furigana shown - furigana is shown by default for any new kanji/word not present in database, or if user requests specifically to show it.
+2. Times furigana shown - furigana on the front is hidden by default for every word, new or not; this increments only when the user has specifically requested to show it (see metric 7).
 3. Times translation shown - user would need to press special button to see word translation.
 4. To-learn marker - true or false, user defines if they want to learn this kanji or word. New words are considered false.
-5. Hide furigana - true or false, user can request to hide furigana for the word or kanji. Doesn't mean it is learned, but strong marker that it is well known.
-6. Quiz success - how many times user answered "sentence learned quiz" correctly.
-7. Quiz fails - how many times user answered "sentence learned quiz" wrongly.
-8. Force furigana - should show furigana even on the front side of the flash card.
+5. Quiz success - how many times user answered "sentence learned quiz" correctly.
+6. Quiz fails - how many times user answered "sentence learned quiz" wrongly.
+7. Force furigana - whether furigana shows on the front side of the flash card. Off by default for every word, including brand-new ones - it only ever turns on via an explicit "force furigana" action (word browser / dictionary, or the 4-direction menu's down flick), and marking a word known (or a correct quiz answer) clears it again in case it had been forced on. Replaces an earlier separate "hide furigana" marker - one flag now covers both directions, since front display only ever cares about show-or-not.
 
 Based on this information we can assume knowledge level of each word or kanji.
 
@@ -164,14 +163,14 @@ So, for example, all highes priority items were removed from queue, and it is no
 We moved to medium priority queue, but marked item from there as hard (goes to the highest priority),
 but we still continue with medium queue until previously added items are checked once.
 
-Pressing on the card itself should flip it to show translation and furigana for all the words, except with hidden furigana.
+Pressing on the card itself should flip it to show translation and furigana for all the words.
 
 Back side of cards is not flipped back on click. Instead there are extra actions available.
 
 Pressing on word should open 4 directions menu:
 1. Right - mark word as known
 2. Left - mark word for learning
-3. Down - hide furigana
+3. Down - force furigana
 4. Up - open dictionary (TODO)
 
 ## Sentences source

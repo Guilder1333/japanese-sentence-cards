@@ -136,8 +136,8 @@ class ReviewViewModel(
     }
 
     /**
-     * Front-of-card display rule: furigana only for words with forceFurigana set (and not
-     * hidden), and never for this sentence's main words - mirrors [FlashCardView]'s CardFront.
+     * Front-of-card display rule: furigana only for words with forceFurigana set, and never for
+     * this sentence's main words - mirrors [FlashCardView]'s CardFront.
      */
     private fun recordShown(card: CardEntity, cardWords: Map<Long, WordEntity>) {
         viewModelScope.launch {
@@ -146,7 +146,7 @@ class ReviewViewModel(
             val furiganaShownIds = card.structure.mapNotNull { token ->
                 val id = token.id ?: return@mapNotNull null
                 if (id in card.mainWordIds) return@mapNotNull null
-                id.takeIf { cardWords[id]?.let { it.forceFurigana && !it.hideFurigana } == true }
+                id.takeIf { cardWords[id]?.forceFurigana == true }
             }
             wordRepository.recordShown(wordIds, furiganaShownIds)
         }
@@ -181,7 +181,7 @@ class ReviewViewModel(
         when (direction) {
             WordDirection.RIGHT -> viewModelScope.launch { wordRepository.markKnown(wordId) }
             WordDirection.LEFT -> viewModelScope.launch { wordRepository.markToLearn(wordId) }
-            WordDirection.DOWN -> viewModelScope.launch { wordRepository.hideFurigana(wordId) }
+            WordDirection.DOWN -> viewModelScope.launch { wordRepository.forceFurigana(wordId) }
             WordDirection.UP -> lookupDictionary(wordId)
         }
     }

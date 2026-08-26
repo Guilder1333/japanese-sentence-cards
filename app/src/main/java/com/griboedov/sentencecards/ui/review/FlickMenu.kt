@@ -29,14 +29,14 @@ import kotlin.math.atan2
 
 /**
  * Purely visual flick-keyboard style overlay for the word 4-direction menu from the README:
- * "Pressing on word should open 4 directions menu - right: know, left: learn, down: hide
+ * "Pressing on word should open 4 directions menu - right: know, left: learn, down: force
  * furigana, up: dictionary". It has no click handlers of its own - [FlashCardView] drives it by
  * press-and-hold-then-drag (see `detectDragGesturesAfterLongPress` there): [highlighted] reflects
  * whichever direction the current drag points to, and lifting the finger commits it.
  *
  * Each direction gets a glyph that hints at its meaning rather than a generic arrow: 知 ("chi" -
  * wisdom/knowledge) in green for "mark known", 不 ("fu" - un-/non-, i.e. not yet known) in red for
- * "mark to learn", ふ (hiragana "fu", as in furigana) for "hide furigana", and a book for the
+ * "mark to learn", ふ (hiragana "fu", as in furigana) for "force furigana", and a book for the
  * dictionary lookup.
  */
 @Composable
@@ -57,7 +57,7 @@ fun FlickMenu(word: WordEntity, highlighted: WordDirection?) {
                 alignment = Alignment.BottomCenter,
                 active = highlighted == WordDirection.DOWN,
                 activeColor = MaterialTheme.colorScheme.secondary,
-                contentDescription = "Hide furigana",
+                contentDescription = "Force furigana",
             ) { tint -> DirectionGlyph("ふ", tint) }
             DirectionSlot(
                 alignment = Alignment.CenterStart,

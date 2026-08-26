@@ -18,7 +18,7 @@ class WordBrowserViewModel(private val wordRepository: WordRepository) : ViewMod
         viewModelScope.launch { wordRepository.setToLearn(id, toLearn) }
     }
 
-    fun setHideFurigana(id: Long, hidden: Boolean) {
-        viewModelScope.launch { wordRepository.setHideFurigana(id, hidden) }
+    fun setForceFurigana(id: Long, forced: Boolean) {
+        viewModelScope.launch { wordRepository.setForceFurigana(id, forced) }
     }
 }

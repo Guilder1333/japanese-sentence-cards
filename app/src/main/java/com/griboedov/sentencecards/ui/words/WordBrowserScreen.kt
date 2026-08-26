@@ -87,7 +87,7 @@ fun WordBrowserScreen(modifier: Modifier = Modifier) {
                 WordRow(
                     word = word,
                     onToLearnChange = { viewModel.setToLearn(word.id, it) },
-                    onHideFuriganaChange = { viewModel.setHideFurigana(word.id, it) },
+                    onForceFuriganaChange = { viewModel.setForceFurigana(word.id, it) },
                 )
             }
         }
@@ -98,7 +98,7 @@ fun WordBrowserScreen(modifier: Modifier = Modifier) {
 private fun WordRow(
     word: WordEntity,
     onToLearnChange: (Boolean) -> Unit,
-    onHideFuriganaChange: (Boolean) -> Unit,
+    onForceFuriganaChange: (Boolean) -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
@@ -137,8 +137,8 @@ private fun WordRow(
                     Switch(checked = word.toLearn, onCheckedChange = onToLearnChange)
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Hide furigana", style = MaterialTheme.typography.bodySmall)
-                    Switch(checked = word.hideFurigana, onCheckedChange = onHideFuriganaChange)
+                    Text("Force furigana", style = MaterialTheme.typography.bodySmall)
+                    Switch(checked = word.forceFurigana, onCheckedChange = onForceFuriganaChange)
                 }
             }
         }

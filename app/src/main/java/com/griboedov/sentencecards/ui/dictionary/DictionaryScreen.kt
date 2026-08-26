@@ -58,7 +58,7 @@ import kotlinx.coroutines.launch
 /**
  * Browses the full bundled dictionary (as opposed to the Word Browser, which only shows words
  * already tracked internally). Each result can be added into the internal words database as
- * known / to-learn / hide-furigana. Tapping a result opens a full-screen detail view with the
+ * known / to-learn / force-furigana. Tapping a result opens a full-screen detail view with the
  * complete, untruncated meaning - the list row itself only shows a short preview.
  */
 @Composable
@@ -222,8 +222,8 @@ private fun AddButtonsRow(onAdd: (WordStatusChoice) -> Unit, modifier: Modifier 
         OutlinedButton(onClick = { onAdd(WordStatusChoice.KNOWN) }, modifier = Modifier.weight(1f)) {
             Text("Known")
         }
-        OutlinedButton(onClick = { onAdd(WordStatusChoice.HIDE_FURIGANA) }, modifier = Modifier.weight(1f)) {
-            Text("Hide furigana")
+        OutlinedButton(onClick = { onAdd(WordStatusChoice.FORCE_FURIGANA) }, modifier = Modifier.weight(1f)) {
+            Text("Force furigana")
         }
     }
 }

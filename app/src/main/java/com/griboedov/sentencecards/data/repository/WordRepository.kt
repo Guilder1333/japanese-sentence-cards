@@ -9,7 +9,7 @@ import kotlinx.coroutines.flow.Flow
 enum class WordStatusChoice(val label: String) {
     KNOWN("known"),
     TO_LEARN("to-learn"),
-    HIDE_FURIGANA("hide furigana"),
+    FORCE_FURIGANA("force furigana"),
 }
 
 /**
@@ -28,21 +28,25 @@ class WordRepository(private val dao: WordDao, private val cardGenerator: CardGe
     /** 4-direction menu: right - mark word as known. */
     suspend fun markKnown(id: Long) = updateWord(id) { it.copy(toLearn = false, forceFurigana = false) }
 
-    /** 4-direction menu: left - mark word for learning. */
+    /**
+     * 4-direction menu: left - mark word for learning. Doesn't touch [WordEntity.forceFurigana] -
+     * front furigana is a separate, explicit opt-in (see [forceFurigana]/[setForceFurigana]), not
+     * bundled into "to learn".
+     */
     suspend fun markToLearn(id: Long) {
-        updateWord(id) { it.copy(toLearn = true, forceFurigana = true) }
+        updateWord(id) { it.copy(toLearn = true) }
         cardGenerator.generateCardsForWord(id)
     }
 
-    /** 4-direction menu: down - hide furigana (strong "well known" marker, not the same as learned). */
-    suspend fun hideFurigana(id: Long) = updateWord(id) { it.copy(hideFurigana = true) }
+    /** 4-direction menu: down - force furigana back on, e.g. for an otherwise-known word you still want the help for. */
+    suspend fun forceFurigana(id: Long) = updateWord(id) { it.copy(forceFurigana = true) }
 
     suspend fun setToLearn(id: Long, toLearn: Boolean) {
         updateWord(id) { it.copy(toLearn = toLearn) }
         if (toLearn) cardGenerator.generateCardsForWord(id)
     }
 
-    suspend fun setHideFurigana(id: Long, hidden: Boolean) = updateWord(id) { it.copy(hideFurigana = hidden) }
+    suspend fun setForceFurigana(id: Long, forced: Boolean) = updateWord(id) { it.copy(forceFurigana = forced) }
 
     /** Called whenever a card carrying this word is shown; increments the tracking metrics. */
     suspend fun recordShown(ids: Collection<Long>, furiganaShownIds: Collection<Long>) {
@@ -84,8 +88,8 @@ class WordRepository(private val dao: WordDao, private val cardGenerator: CardGe
         val base = existing ?: WordEntity(id = (dao.maxId() ?: 0L) + 1, word = word, furigana = furigana, translation = translation)
         val updated = when (status) {
             WordStatusChoice.KNOWN -> base.copy(translation = translation, toLearn = false, forceFurigana = false)
-            WordStatusChoice.TO_LEARN -> base.copy(translation = translation, toLearn = true, forceFurigana = true)
-            WordStatusChoice.HIDE_FURIGANA -> base.copy(translation = translation, toLearn = false, forceFurigana = false, hideFurigana = true)
+            WordStatusChoice.TO_LEARN -> base.copy(translation = translation, toLearn = true)
+            WordStatusChoice.FORCE_FURIGANA -> base.copy(translation = translation, toLearn = false, forceFurigana = true)
         }
         if (existing != null) dao.update(updated) else dao.upsert(updated)
         if (status == WordStatusChoice.TO_LEARN) cardGenerator.generateCardsForWord(updated.id)

@@ -10,21 +10,42 @@ rather than silent guessing.
   marked - swap the formula whenever a real one is defined; nothing else depends on it.
 
 - **New word defaults** (`data/importer/StructuredImport.kt`): a brand-new kanji/word from import
-  gets `forceFurigana = true` (shows furigana until confirmed known - reconciling "furigana shown
-  by default for any new kanji/word" from the README's metrics section with "front only shows
-  furigana for force-furigana words" from its UI section) and `toLearn = false`, the README's
-  literal default. An earlier version of this note had `toLearn = true` here, reasoning that every
-  imported word was automatically one of its sentence's main (to-learn) words - that's no longer
-  true now that import only populates the raw sentence pool and never creates cards directly (see
-  "Sentences vs. cards split" below), so the literal README default applies again.
+  gets `toLearn = false` and `forceFurigana = false` - both the README's literal defaults ("new
+  words are considered false" for to-learn; front furigana is opt-in for every word per your
+  instruction, not on-by-default even for new ones - see "Furigana display" below). An earlier
+  version of this note had `toLearn = true`, reasoning that every imported word was automatically
+  one of its sentence's main (to-learn) words - that's no longer true now that import only
+  populates the raw sentence pool and never creates cards directly (see "Sentences vs. cards split"
+  below), so the literal README default applies.
 
 - **4-direction menu effects** (`data/repository/WordRepository.kt`): right (know) clears both
-  `toLearn` and `forceFurigana`; left (learn) sets both `toLearn` and `forceFurigana`; down hides
-  furigana; up looks the word up in the bundled dictionary (see `data/dictionary/`) - the README
-  marks dictionary as a TODO, but it's since been fully implemented, offline. A correct quiz
-  answer applies the same `toLearn`/`forceFurigana` clear as the right-flick "known" action -
-  otherwise a word that graduates out of a sentence's main word list keeps showing front-side
-  furigana forever (nothing else ever clears `forceFurigana` once it stops being a main word).
+  `toLearn` and `forceFurigana`; left (learn) sets `toLearn` only - it deliberately leaves
+  `forceFurigana` untouched, per your instruction that front furigana is a separate, explicit
+  opt-in rather than something bundled into "to learn"; down forces furigana back on
+  (`forceFurigana = true`) - e.g. for an otherwise-known word the user still wants the crutch for;
+  up looks the word up in the bundled dictionary (see `data/dictionary/`) - the README marks
+  dictionary as a TODO, but it's since been fully implemented, offline. A correct quiz answer
+  applies the same `toLearn`/`forceFurigana` clear as the right-flick "known" action, in case
+  `forceFurigana` had been explicitly turned on for that word.
+
+- **Furigana display, front vs. back** (`ui/review/FlashCardView.kt`, `data/db/WordEntity.kt`):
+  per your instruction, there is only one furigana flag now - `forceFurigana` - not two, and it
+  defaults `false` for every word, new or not (front furigana is opt-in, full stop - not even new
+  words get it "for free" the way the README's original metric 2 described). It's set `true` only
+  by an explicit "force furigana" action (word browser / dictionary, or the 4-direction menu's down
+  flick), and cleared again by marking a word known or a correct quiz answer, in case it had been
+  forced on. The back is the reveal side and always shows furigana for every word, unconditionally
+  - there's no longer a way to suppress it there. This replaces an earlier separate `hideFurigana`
+  field/"strong known" marker, which is now removed entirely (the README's word-tracking metrics
+  list is 7 metrics, not 8).
+
+- **Knowledge level's "Known" tier** (`data/knowledge/KnowledgeLevel.kt`): used to be a special
+  case keyed off the now-removed `hideFurigana` field (later, briefly, off `!toLearn &&
+  !forceFurigana`) - but since `forceFurigana` now defaults `false` for *every* untouched word,
+  that combination no longer means "confirmed known," it means "never touched yet," which was
+  misclassifying every fresh import as Known. Folded `KNOWN` into the same score ladder as the
+  other tiers (top rung, `score >= 20`) instead of a separate shortcut - still just the PLACEHOLDER
+  formula the README leaves as a TODO, nothing depends on the exact numbers.
 
 - **Tap vs. the 4-direction menu** (`ui/review/ReviewViewModel.kt`): a plain tap on a back-of-card
   word and flicking it up do the same thing - open the dictionary lookup - per your instruction.
@@ -113,7 +134,7 @@ rather than silent guessing.
 - **Dictionary tab and "add as..."** (`ui/dictionary/`, `WordRepository.addFromDictionary`): the
   Dictionary tab browses the whole bundled JMdict data (prefix match on any kanji/kana spelling,
   plus a substring match on meanings - only run on explicit search, not per keystroke, since the
-  meaning match is an unindexed scan over ~200k rows). Adding a result as known/to-learn/hide-
+  meaning match is an unindexed scan over ~200k rows). Adding a result as known/to-learn/force-
   furigana upserts a row in the *internal* words table, matched by exact `word` text (kanji, or
   kana if the entry has no kanji) - adding the same word twice updates it in place rather than
   creating a duplicate. The new word's `translation` is the dictionary's full multi-sense summary

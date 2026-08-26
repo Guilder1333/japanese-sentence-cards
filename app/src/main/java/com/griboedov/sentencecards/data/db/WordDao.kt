@@ -32,6 +32,14 @@ interface WordDao {
     @Query("SELECT MAX(id) FROM words")
     suspend fun maxId(): Long?
 
+    /**
+     * Every tracked word id, for [com.griboedov.sentencecards.data.importer.SentenceImporter] to
+     * check "is this word already known" in memory during a large import instead of one DB round
+     * trip per word token.
+     */
+    @Query("SELECT id FROM words")
+    suspend fun allIds(): List<Long>
+
     @Query("SELECT COUNT(*) FROM words")
     suspend fun count(): Int
 }
