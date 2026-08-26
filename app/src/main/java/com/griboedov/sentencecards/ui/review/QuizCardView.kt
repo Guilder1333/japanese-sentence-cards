@@ -3,8 +3,11 @@ package com.griboedov.sentencecards.ui.review
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -20,7 +23,7 @@ import com.griboedov.sentencecards.data.db.CardEntity
 import com.griboedov.sentencecards.data.db.WordEntity
 import com.griboedov.sentencecards.ui.theme.EasyPriority
 import com.griboedov.sentencecards.ui.theme.HighestPriority
-import com.griboedov.sentencecards.ui.theme.JapaneseSentenceStyle
+import com.griboedov.sentencecards.ui.theme.japaneseSentenceStyleFor
 import com.griboedov.sentencecards.ui.theme.wordStatusColor
 
 /**
@@ -46,20 +49,24 @@ fun QuizCardView(
     modifier: Modifier = Modifier,
 ) {
     Card(modifier = modifier.fillMaxWidth()) {
+        // Scrollable so a long list of quiz words/options - which can easily be taller than the
+        // available space - scrolls inside the card (including down to the Continue button)
+        // instead of overflowing it.
         Column(
-            modifier = Modifier.fillMaxWidth().padding(20.dp),
+            modifier = Modifier.fillMaxWidth().fillMaxHeight().verticalScroll(rememberScrollState()).padding(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Text("Quiz - what's the reading?", style = MaterialTheme.typography.labelLarge)
 
+            val sentenceStyle = japaneseSentenceStyleFor(card.text.length)
             FlowRow(horizontalArrangement = Arrangement.Center, verticalArrangement = Arrangement.Center) {
                 for (token in card.structure) {
                     val word = token.id?.let { words[it] }
                     val isMainWord = token.id != null && token.id in card.mainWordIds
                     Text(
                         text = token.word,
-                        style = JapaneseSentenceStyle,
+                        style = sentenceStyle,
                         color = wordStatusColor(word, isMainWord) ?: Color.Unspecified,
                         modifier = Modifier.padding(horizontal = 2.dp),
                     )

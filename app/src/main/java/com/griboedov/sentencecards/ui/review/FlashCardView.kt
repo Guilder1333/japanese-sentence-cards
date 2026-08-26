@@ -9,17 +9,19 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -30,13 +32,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.griboedov.sentencecards.data.db.CardEntity
 import com.griboedov.sentencecards.data.db.SentenceToken
 import com.griboedov.sentencecards.data.db.WordEntity
-import com.griboedov.sentencecards.ui.theme.FuriganaStyle
-import com.griboedov.sentencecards.ui.theme.JapaneseSentenceStyle
+import com.griboedov.sentencecards.ui.theme.furiganaStyleFor
+import com.griboedov.sentencecards.ui.theme.japaneseSentenceStyleFor
 import com.griboedov.sentencecards.ui.theme.wordStatusColor
 
 /**
@@ -58,6 +61,14 @@ fun FlashCardView(
 ) {
     val rotation by animateFloatAsState(targetValue = if (flipped) 180f else 0f, animationSpec = tween(400), label = "cardFlip")
 
+    // Which side is showing, derived from `rotation` but only changing value once per flip
+    // (at the 90 degree midpoint) instead of every animation frame. Reading `rotation` directly
+    // in composition (as this used to) forced CardFront/CardBack - a FlowRow of many Text nodes -
+    // to fully recompose ~24 times over the course of one flip, which was the source of the
+    // visible lag; `rotation` itself is now only read inside the graphicsLayer draw-phase lambda
+    // below, which doesn't trigger recomposition at all.
+    val showBack by remember { derivedStateOf { rotation > 90f } }
+
     // Flick gesture state, lifted here (rather than per-word) so the highlight popup is drawn as
     // a plain layer within this same composition/window - not a separate Popup window, which
     // would risk swallowing the drag events that are still arriving at the word's pointerInput.
@@ -65,9 +76,10 @@ fun FlashCardView(
     var flickDirection by remember(card.id) { mutableStateOf<WordDirection?>(null) }
 
     Card(
+        // Height comes entirely from the incoming modifier (ReviewScreen gives this a weight so
+        // the card fills the screen alongside the badge/buttons); only width is set here.
         modifier = modifier
             .fillMaxWidth()
-            .aspectRatio(1.3f)
             .graphicsLayer {
                 rotationY = rotation
                 cameraDistance = 16f * density
@@ -75,16 +87,26 @@ fun FlashCardView(
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
                 indication = null,
-                enabled = rotation < 90f,
+                enabled = !showBack,
                 onClick = onFlip,
             ),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
     ) {
         Box(modifier = Modifier.fillMaxSize().padding(20.dp), contentAlignment = Alignment.Center) {
-            if (rotation <= 90f) {
-                CardFront(card, words)
+            if (!showBack) {
+                // Scrollable so a long sentence (or one that hit the font-size floor) can still be
+                // read in full instead of overflowing the card's fixed height.
+                Box(
+                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    CardFront(card, words)
+                }
             } else {
-                Box(modifier = Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }, contentAlignment = Alignment.Center) {
+                Box(
+                    modifier = Modifier.fillMaxSize().graphicsLayer { rotationY = 180f }.verticalScroll(rememberScrollState()),
+                    contentAlignment = Alignment.Center,
+                ) {
                     CardBack(
                         card = card,
                         words = words,
@@ -110,6 +132,7 @@ fun FlashCardView(
 
 @Composable
 private fun CardFront(card: CardEntity, words: Map<Long, WordEntity>) {
+    val sentenceStyle = japaneseSentenceStyleFor(card.text.length)
     FlowRow(
         modifier = Modifier.fillMaxWidth().wrapContentHeight(),
         horizontalArrangement = Arrangement.Center,
@@ -126,6 +149,7 @@ private fun CardFront(card: CardEntity, words: Map<Long, WordEntity>) {
             TokenText(
                 token = token,
                 furigana = if (showFurigana) token.furigana else null,
+                sentenceStyle = sentenceStyle,
                 color = wordStatusColor(word, isMainWord),
             )
         }
@@ -144,6 +168,7 @@ private fun CardBack(
     onFlickDirectionChange: (WordDirection?) -> Unit,
     onFlickEnd: (committed: Boolean) -> Unit,
 ) {
+    val sentenceStyle = japaneseSentenceStyleFor(card.text.length)
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         FlowRow(horizontalArrangement = Arrangement.Center, verticalArrangement = Arrangement.Center) {
             for (token in card.structure) {
@@ -186,6 +211,7 @@ private fun CardBack(
                     TokenText(
                         token = token,
                         furigana = token.furigana,
+                        sentenceStyle = sentenceStyle,
                         color = wordStatusColor(word, isMainWord),
                     )
                 }
@@ -200,16 +226,16 @@ private fun CardBack(
 }
 
 @Composable
-private fun TokenText(token: SentenceToken, furigana: String?, color: Color? = null) {
+private fun TokenText(token: SentenceToken, furigana: String?, sentenceStyle: TextStyle, color: Color? = null) {
     Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(horizontal = 2.dp)) {
         Text(
             text = furigana ?: "",
-            style = FuriganaStyle,
+            style = furiganaStyleFor(sentenceStyle),
             color = color ?: Color.Unspecified,
         )
         Text(
             text = token.word,
-            style = JapaneseSentenceStyle,
+            style = sentenceStyle,
             color = color ?: Color.Unspecified,
         )
     }

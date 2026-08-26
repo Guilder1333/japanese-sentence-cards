@@ -7,8 +7,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -60,10 +58,14 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
             )
             else -> {
                 val card = state.card!!
+                // Fills the whole screen (no outer scroll): the card/quiz gets whatever's left
+                // over via weight(1f) after the badge, hint text and buttons take their natural
+                // height, so the card is as big as the screen allows. Long content that doesn't
+                // fit inside that space scrolls internally instead (see FlashCardView/QuizCardView).
                 Column(
-                    modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp),
+                    modifier = Modifier.fillMaxSize().padding(20.dp),
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
                     QueueBadge(level = card.queueLevel, isQuiz = card.pendingQuiz)
 
@@ -76,6 +78,7 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
                             allAnswered = state.quizAllAnswered,
                             onSelect = viewModel::onQuizOptionSelected,
                             onContinue = viewModel::onQuizContinue,
+                            modifier = Modifier.weight(1f),
                         )
                     } else {
                         FlashCardView(
@@ -85,13 +88,8 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
                             onFlip = viewModel::onFlip,
                             onWordTap = viewModel::onWordTapped,
                             onWordDirection = viewModel::onWordDirection,
+                            modifier = Modifier.weight(1f),
                         )
-                        if (!state.isFlipped) {
-                            Text(
-                                text = "Tap the card to reveal translation and furigana",
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
                         ReviewButtonsRow(onGrade = viewModel::onGrade)
                     }
                 }
