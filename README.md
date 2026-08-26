@@ -17,13 +17,18 @@ the bundled dictionary's licensing.
   cards directly.
 - "Adding word to learn" sentence-selection algorithm (`data/cards/CardGenerator.kt`,
   `CardScoring.kt`): whenever a word is marked to-learn (4-direction menu, word browser, or
-  dictionary "add as to-learn"), the sentence pool is searched for sentences containing that word,
-  scored, and the 3 best-fitting become cards. Scoring per word token in a candidate sentence: +2
-  if the word isn't tracked yet, +2 if it's tracked and well-known (not to-learn, furigana no
-  longer forced), +1 if it's tracked but still shaky (not to-learn, furigana still forced), +0 if
-  it's itself another to-learn target (avoid stacking multiple unlearned words in one card). A
-  sentence already backing a card is never picked again, so re-marking a word to-learn surfaces
-  the next-best batch instead of duplicates.
+  dictionary "add as to-learn"), the word ends up backed by (at most) 3 cards total - reusing
+  existing ones first, so no more cards get spawned than actually needed:
+  1. Any sentence containing the word that already backs a card - for some other word, or even
+     this one already - is reused: the word is just added to that card's main words (reactivating
+     the card if it had already been fully learned), instead of spawning a duplicate card for the
+     same sentence.
+  2. Only the shortfall, if any, is filled with brand-new cards: the sentence pool is searched for
+     remaining (not yet carded) sentences containing the word, scored, and the best ones become
+     cards. Scoring per word token in a candidate sentence: +2 if the word isn't tracked yet, +2
+     if it's tracked and well-known (not to-learn, furigana no longer forced), +1 if it's tracked
+     but still shaky (not to-learn, furigana still forced), +0 if it's itself another to-learn
+     target (avoid stacking multiple unlearned words in one card).
 - Priority queue (highest/medium/easy/backlog), including "twice in a row demotes a level" and
   "don't jump the queue mid-pass".
 - Review UI: flip card, word 4-direction menu (know/learn/force furigana/dictionary) via a
@@ -181,15 +186,18 @@ I have python script for making similar kind of flash cards for anki.
 
 ### Adding word to learn
 
-Whenever a word is marked to-learn, the sentence pool is searched for sentences containing it, and the 3 best-fitting become cards (see `data/cards/`).
+Whenever a word is marked to-learn, it should end up backed by (at most) 3 cards total - not 3 *new* cards regardless of what's already there. So first, existing cards are reused, and only the shortfall is filled with newly generated ones (see `data/cards/`):
 
-A sentence must contain the word to even be a candidate. Among candidates, each word token in the sentence adds bonus points:
+1. **Reuse.** Search existing cards for any whose sentence already contains the word (carrying it for some other word, or even this one from an earlier pass). Each one just gets the word added to its main words, instead of a duplicate card being spawned for the same sentence. If such a card had already been fully learned (out of the review rotation), adding the word reactivates it, so the word actually gets reviewed/quizzed there.
+2. **Fill the shortfall.** If reuse covered fewer than 3, search the remaining (not yet carded) sentence pool for sentences containing the word, score them, and turn the best-fitting ones into new cards, up to the remaining count.
+
+A sentence must contain the word to even be a candidate for either step. Scoring (step 2 only) - each word token in the sentence adds bonus points:
 - not yet in the words table at all: +2
 - in the words table, not to-learn, but furigana still forced (still shaky): +1
 - in the words table, not to-learn, furigana no longer forced (well known): +2
 - itself another to-learn word: +0 (a card should isolate the one new word, not stack several)
 
-The 3 highest-scoring candidates become cards. A sentence already backing a card is excluded from future candidate pools, so marking the same word to-learn again (e.g. after toggling it off and on) surfaces the next-best batch rather than duplicates.
+A sentence already backing a card (reused or not) is excluded from step 2's candidates, so a sentence never backs two cards, and marking the same word to-learn again (e.g. after toggling it off and on) fills any remaining shortfall from the next-best batch rather than duplicating what's already there.
 
 # Notes
 

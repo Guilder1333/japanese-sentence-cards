@@ -120,11 +120,21 @@ rather than silent guessing.
   - Cards are only ever created by `CardGenerator`, triggered from every place a word gets marked
     to-learn (`WordRepository.markToLearn`, `.setToLearn(id, true)`, `.addFromDictionary(...,
     TO_LEARN)`) - never by import.
-  - A sentence that already backs a card is excluded from future candidate pools (any word's), so
-    the same sentence never backs two cards, and re-marking a word to-learn (e.g. toggling it off
-    and back on) naturally surfaces the *next*-best batch instead of duplicating the first one.
   - A freshly generated card's `mainWordIds` is just `[wordId]` - the one word it was picked for -
     since the scoring formula already discourages candidates containing other to-learn words.
+
+- **Card reuse, not just dedup** (`data/cards/CardGenerator.kt`): per your follow-up, "up to 3
+  cards" means at most 3 total covering the word, not 3 new ones piled on top of whatever's already
+  there. Before generating anything, `CardGenerator` looks for existing cards whose sentence
+  already contains the word (via the same `sentence_words` index) - each one just gets the word
+  added to its `mainWordIds`, reusing the card instead of spawning a duplicate for the same
+  sentence; a card that had already fully graduated (`learned = true`) is reactivated (`learned`,
+  `quizSucceeded`, `pendingQuiz` cleared, `queueLevel` bumped to `HIGHEST`) so the newly added word
+  actually surfaces for review/quiz instead of being silently stuck on a card that's dropped out of
+  the rotation. Only the shortfall (`3 - reusedCount`) is filled with brand-new cards from the
+  remaining not-yet-carded candidates, scored as before - so a sentence never backs two cards, and
+  re-marking a word to-learn (e.g. toggling it off and back on) tops up any remaining shortfall
+  from the next-best batch instead of duplicating what's already there.
 
 - **Word ids on import**: if a structure token omits `id` for a `kind: 1` (word) token, one is
   assigned (`max known id + 1`). If a `kind: 1` token's `id` already exists in the database, the

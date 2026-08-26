@@ -20,7 +20,13 @@ interface CardDao {
     @Query("SELECT COUNT(*) FROM cards")
     suspend fun count(): Int
 
-    /** Sentence ids that already have a card, of any kind - so a sentence never backs two cards. */
-    @Query("SELECT DISTINCT sentenceId FROM cards")
-    suspend fun cardedSentenceIds(): List<Long>
+    /**
+     * Every existing card backed by one of [sentenceIds] - so
+     * [com.griboedov.sentencecards.data.cards.CardGenerator] can both find cards to reuse (add a
+     * newly to-learn word to an already-carded sentence's main words, instead of spawning a
+     * duplicate card for it) and know which of [sentenceIds] are already carded and thus excluded
+     * from fresh candidates.
+     */
+    @Query("SELECT * FROM cards WHERE sentenceId IN (:sentenceIds)")
+    suspend fun cardsForSentences(sentenceIds: Collection<Long>): List<CardEntity>
 }
