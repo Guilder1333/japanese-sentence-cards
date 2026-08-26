@@ -170,6 +170,62 @@ def split_sentences(text: str) -> Iterator[str]:
         yield "".join(buf)
 
 
+def _split_depth_zero(text: str) -> List[str]:
+    """
+    Splits text into chunks at 。.！!？?, tracking bracket depth the same way split_sentences does
+    (so a terminator inside a nested quote doesn't count). Used to count/extract the individual
+    sentences packed inside a single 「」/『』 quote span - see split_long_quotes.
+    """
+    parts = []
+    buf = []
+    depth = 0
+    for ch in text:
+        buf.append(ch)
+        if ch in OPEN_BRACKETS:
+            depth += 1
+        elif ch in CLOSE_BRACKETS:
+            depth = max(0, depth - 1)
+        if depth == 0 and ch in SENTENCE_END_CHARS:
+            parts.append("".join(buf))
+            buf = []
+    if buf:
+        parts.append("".join(buf))
+    return parts
+
+
+def extract_top_level_quotes(text: str) -> List[str]:
+    """Returns the contents (brackets excluded) of each top-level 「」/『』 quote span in text."""
+    spans = []
+    depth = 0
+    start = None
+    for i, ch in enumerate(text):
+        if ch in OPEN_BRACKETS:
+            if depth == 0:
+                start = i + 1
+            depth += 1
+        elif ch in CLOSE_BRACKETS:
+            depth = max(0, depth - 1)
+            if depth == 0 and start is not None:
+                spans.append(text[start:i])
+                start = None
+    return spans
+
+
+def split_long_quotes(raw: str) -> List[str]:
+    """
+    A quote that runs on for several sentences (a whole stretch of dialogue packed into one
+    「」) makes for a needlessly long, unfocused flashcard once it's merged with its surrounding
+    narration by split_sentences. So: count how many sentences are packed inside `raw`'s top-level
+    quote(s), and if that's more than one, break each quote's contents into its own per-sentence
+    pieces and drop the outer sentence (narration and all) in favor of those. Returns `[raw]`
+    unchanged when there's nothing to split (no quotes, or every quote holds only one sentence).
+    """
+    quote_sentences = [s for quote in extract_top_level_quotes(raw) for s in _split_depth_zero(quote)]
+    if len(quote_sentences) > 1:
+        return quote_sentences
+    return [raw]
+
+
 def clean_sentence(raw: str) -> str:
     # Plain-text books commonly wrap lines and/or use full-width spaces for ruby/indentation -
     # none of that is meaningful in a single flash-card sentence, so strip *all* whitespace
@@ -339,6 +395,7 @@ def main() -> None:
     parser.add_argument("--min-chars", type=int, default=2, help="Drop sentences shorter than this many characters (default: 2)")
     parser.add_argument("--min-japanese-ratio", type=float, default=0.5, help="Drop sentences whose letters are less than this fraction kanji/kana (default: 0.5; some books mix in English/French sentences). Set to 0 to disable")
     parser.add_argument("--keep-duplicates", action="store_true", help="Keep exact-duplicate sentences instead of deduplicating (books tend to repeat phrases a lot)")
+    parser.add_argument("--keep-long-quotes", action="store_true", help="Don't split multi-sentence 「」/『』 quotes into separate sentences (default: split them and drop the enclosing sentence - see split_long_quotes)")
     parser.add_argument("--limit", type=int, default=None, help="Stop after this many sentences (useful for a quick test run)")
     parser.add_argument("--pretty", action="store_true", help="Pretty-print the output JSON (bigger file, easier to read)")
     args = parser.parse_args()
@@ -362,25 +419,31 @@ def main() -> None:
     for path in files:
         text = read_text(path, args.encoding)
         file_count = 0
+        done_with_file = False
         for raw in split_sentences(text):
-            sentence = clean_sentence(raw)
-            if len(sentence) < args.min_chars:
-                continue
-            if japanese_ratio(sentence) < args.min_japanese_ratio:
-                continue
-            if not args.keep_duplicates:
-                if sentence in seen_sentences:
+            candidates = [raw] if args.keep_long_quotes else split_long_quotes(raw)
+            for candidate in candidates:
+                sentence = clean_sentence(candidate)
+                if len(sentence) < args.min_chars:
                     continue
-                seen_sentences.add(sentence)
+                if japanese_ratio(sentence) < args.min_japanese_ratio:
+                    continue
+                if not args.keep_duplicates:
+                    if sentence in seen_sentences:
+                        continue
+                    seen_sentences.add(sentence)
 
-            structure = build_structure(tagger, sentence, dictionary, word_ids)
-            results.append({"text": sentence, "translation": "", "structure": structure})
-            file_count += 1
-            total_from_files += 1
+                structure = build_structure(tagger, sentence, dictionary, word_ids)
+                results.append({"text": sentence, "translation": "", "structure": structure})
+                file_count += 1
+                total_from_files += 1
 
-            if len(results) % 1000 == 0:
-                print(f"...{len(results)} sentences processed", file=sys.stderr)
-            if args.limit is not None and len(results) >= args.limit:
+                if len(results) % 1000 == 0:
+                    print(f"...{len(results)} sentences processed", file=sys.stderr)
+                if args.limit is not None and len(results) >= args.limit:
+                    done_with_file = True
+                    break
+            if done_with_file:
                 break
 
         print(f"{os.path.basename(path)}: {file_count} sentence(s)", file=sys.stderr)
