@@ -194,7 +194,16 @@ def _split_depth_zero(text: str) -> List[str]:
 
 
 def extract_top_level_quotes(text: str) -> List[str]:
-    """Returns the contents (brackets excluded) of each top-level 「」/『』 quote span in text."""
+    """
+    Returns the contents (brackets excluded) of each top-level 「」/『』 quote span in text.
+
+    A quote that never closes within `text` (its closing bracket got OCR'd/digitized away
+    entirely - the MAX_UNCLOSED_QUOTE_CHARS case in split_sentences, see tools/example.txt) is
+    still included, running from its opening bracket to the end of text: split_sentences already
+    gave up on depth-tracking for it and yielded whatever piled up as one raw sentence, so without
+    this it silently keeps looking like unquoted narration and split_long_quotes never gets a
+    chance to break it up.
+    """
     spans = []
     depth = 0
     start = None
@@ -208,6 +217,8 @@ def extract_top_level_quotes(text: str) -> List[str]:
             if depth == 0 and start is not None:
                 spans.append(text[start:i])
                 start = None
+    if depth > 0 and start is not None:
+        spans.append(text[start:])
     return spans
 
 
