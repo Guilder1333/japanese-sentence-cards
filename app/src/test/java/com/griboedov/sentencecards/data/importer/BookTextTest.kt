@@ -2,6 +2,7 @@ package com.griboedov.sentencecards.data.importer
 
 import com.griboedov.sentencecards.data.db.TokenKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BookTextTest {
@@ -84,5 +85,32 @@ class BookTextTest {
     fun `converts katakana to hiragana and leaves the prolonged sound mark alone`() {
         assertEquals("ことば", kataToHira("コトバ"))
         assertEquals("ばー", kataToHira("バー"))
+    }
+
+    @Test
+    fun `checkSingleSentence accepts exactly one sentence, punctuation optional`() {
+        assertEquals(SingleSentenceCheck.Ok("これは文です。"), checkSingleSentence("これは文です。"))
+        // No terminator at all still counts as one sentence - splitSentences flushes the trailing
+        // buffer even without a terminator.
+        assertEquals(SingleSentenceCheck.Ok("これは文です"), checkSingleSentence("これは文です"))
+    }
+
+    @Test
+    fun `checkSingleSentence rejects more than one sentence`() {
+        val result = checkSingleSentence("これは一つ目。これは二つ目。")
+
+        assertTrue(result is SingleSentenceCheck.Error)
+    }
+
+    @Test
+    fun `checkSingleSentence rejects a quote packing more than one sentence`() {
+        val result = checkSingleSentence("彼は「おはよう。元気？」と言った。")
+
+        assertTrue(result is SingleSentenceCheck.Error)
+    }
+
+    @Test
+    fun `checkSingleSentence rejects blank input`() {
+        assertTrue(checkSingleSentence("   ") is SingleSentenceCheck.Error)
     }
 }

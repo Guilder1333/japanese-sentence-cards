@@ -97,13 +97,15 @@ rather than silent guessing.
   `{ text?, translation, structure }` objects, `structure` matching the README's schema
   verbatim, `text` optional (derived from `structure` if omitted).
 
-- **Import from file** (`ui/importsentences/`): import is file-only - a system file picker
-  (`ActivityResultContracts.OpenDocument`, accepting any file type since not every picker tags
-  `.json`/`.txt` files with a matching MIME type) that reads the file directly, since structured
-  JSON files are expected to reach the megabytes - too large to comfortably paste, and too large
-  to dump into an editable text field besides (Compose's text field gets sluggish with very large
-  editable content). An earlier paste-a-small-JSON-directly box was removed per your note that
-  it was redundant now that file import covers every case.
+- **Import from file** (`ui/importsentences/`): bulk import (structured JSON or a plain-text book)
+  is file-only - a system file picker (`ActivityResultContracts.OpenDocument`, accepting any file
+  type since not every picker tags `.json`/`.txt` files with a matching MIME type) that reads the
+  file directly, since these are expected to reach the megabytes - too large to comfortably paste,
+  and too large to dump into an editable text field besides (Compose's text field gets sluggish
+  with very large editable content). An earlier paste-a-small-JSON-directly box was removed per
+  your note that it was redundant now that file import covers every bulk case; the single-sentence
+  text box added later (below) is a deliberately different feature, not a re-add of that one - it
+  exists to hand-pick one sentence's main words, not to bulk-import.
 
 - **Plain-text book import** (`data/importer/BookImporter.kt`, `BookText.kt`): the in-app
   equivalent of `tools/import_book.py`, for when running that script isn't an option. Decisions
@@ -137,6 +139,39 @@ rather than silent guessing.
     (min 2 chars, min 50% Japanese-script ratio, dedupe exact-duplicate sentences, split multi-
     sentence quotes) but the UI doesn't expose them - no settings screen exists yet (see README's
     "Not yet done"), so tune `BookImportOptions`'s defaults directly if they need to change.
+  - Tokenization/dictionary-lookup logic is factored out behind a `SentenceTokenizer` interface
+    (`JapaneseTokenizer` is the real Kuromoji-backed implementation) specifically so
+    `SingleSentenceImporter` below could reuse the exact same tokenizing step - and so both could be
+    unit-tested with a fake in place of `JapaneseTokenizer`, which needs a real Android `Context`
+    (via `DictionaryRepository`) and so can't be constructed in a plain JVM test.
+
+- **Single-sentence import** (`data/cards/SingleSentenceImporter.kt`,
+  `ui/importsentences/SingleSentenceCardView.kt`): type one sentence directly, pick which of its
+  words this card should teach, done - per your spec. Decisions this needed that book import
+  didn't:
+  - **"Is this really one sentence?"** reuses `BookImporter`'s exact splitting rule
+    (`checkSingleSentence`/`splitIntoCleanSentences` in `BookText.kt`) rather than a separate,
+    looser check - so what counts as "one sentence" is consistent between the two features, and a
+    quote packing more than one sentence is correctly rejected here too, not just merged away.
+  - **Word id resolution does check the DB** (`wordDao.findByWord(surface)`), unlike book import -
+    worth the extra per-word lookups for a single sentence, and specifically to avoid fragmenting
+    an already-tracked word's progress into a second `WordEntity` right at the moment the user is
+    deliberately hand-picking main words (same convention as
+    `WordRepository.addFromDictionary`'s reuse-by-exact-text-match).
+  - **Translation happens at parse time**, not at card-creation time: the review view is specified
+    to look like a normal card back (translation included), and nothing about the sentence changes
+    between parsing and the user pressing Import, so there's no reason to translate twice. This
+    does mean Cancel doesn't get that translation API call back - accepted as the cost of a
+    deliberate, one-sentence-at-a-time flow rather than a bulk one.
+  - **Separate, simpler view, not a `FlashCardView` variant** (per your explicit direction): always
+    shows translation+furigana (no front/flip), a plain tap toggles a word between "not picked"
+    (green) and "picked as main word" (blue) instead of opening the 4-direction flick menu, and the
+    bottom row is Import/Cancel (Import disabled until at least one word is picked) instead of
+    Hard/Medium/Easy/Learned.
+  - **`SentenceImporter.importOne`**: a fourth entry point alongside `importJson`/`importStream`/
+    `importParsed`, needed because this feature must act on the just-written `SentenceEntity`
+    immediately (to build the `CardEntity` from it) - unlike the other three, which only ever
+    report back a summary count.
 
 - **Sentences vs. cards split** (`data/db/SentenceEntity.kt`, `CardEntity.kt`, `SentenceWordCrossRef.kt`,
   `data/cards/`): per your clarification, `sentences` is just the raw imported pool (can be

@@ -45,6 +45,16 @@ the bundled dictionary's licensing.
   `tools/import_book.py` does offline (sentence splitting, tokenizing/tagging, per-word dictionary
   glosses), but on-device via the bundled Kuromoji IPADIC tokenizer, for when running the Python
   script isn't an option. Reuses the same batched DB-write path as the structured-JSON import.
+- Single-sentence import (`data/cards/SingleSentenceImporter.kt`): type one sentence directly
+  instead of importing a whole file. It's checked to really be one sentence (same splitting rule
+  as book import - anything else is reported back as an error), then shown in a dedicated review
+  view - not the normal review `FlashCardView` - with every word tappable to toggle it green (not
+  picked) / blue (picked as this card's main word). Import is only enabled once at least one word
+  is picked, and creates exactly one card with those words as its main words - no scoring/search,
+  no other cards or sentences touched. The sentence is still written to the pool and translated
+  like any other card (so its other words are available if picked to-learn later), and word ids
+  are resolved against the words table by exact text match first, reusing an already-tracked
+  word's id instead of creating a duplicate.
 
 **Partial**
 - Knowledge-level formula: placeholder only, per the TODO below (`data/knowledge/KnowledgeLevel.kt`).

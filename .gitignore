@@ -25,3 +25,9 @@ build/
 /app/src/main/assets/dictionary/jmdict.db
 
 example.txt
+
+# Release signing - local-only credentials/keystore, never committed (see keystore.properties'
+# own comment for where the actual .jks file lives).
+/keystore.properties
+*.jks
+*.keystore

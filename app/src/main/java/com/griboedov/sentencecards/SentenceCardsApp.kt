@@ -3,9 +3,11 @@ package com.griboedov.sentencecards
 import android.app.Application
 import android.util.Log
 import com.griboedov.sentencecards.data.cards.CardGenerator
+import com.griboedov.sentencecards.data.cards.SingleSentenceImporter
 import com.griboedov.sentencecards.data.db.AppDatabase
 import com.griboedov.sentencecards.data.dictionary.DictionaryRepository
 import com.griboedov.sentencecards.data.importer.BookImporter
+import com.griboedov.sentencecards.data.importer.JapaneseTokenizer
 import com.griboedov.sentencecards.data.importer.SentenceImporter
 import com.griboedov.sentencecards.data.repository.CardRepository
 import com.griboedov.sentencecards.data.repository.SentenceRepository
@@ -36,6 +38,8 @@ class SentenceCardsApp : Application() {
         private set
     lateinit var bookImporter: BookImporter
         private set
+    lateinit var singleSentenceImporter: SingleSentenceImporter
+        private set
     lateinit var dictionaryRepository: DictionaryRepository
         private set
 
@@ -60,7 +64,11 @@ class SentenceCardsApp : Application() {
         cardRepository = CardRepository(database.cardDao())
         importer = SentenceImporter(database.wordDao(), database.sentenceDao())
         dictionaryRepository = DictionaryRepository(this)
-        bookImporter = BookImporter(database.wordDao(), dictionaryRepository, importer)
+        // Shared across both parsing paths below - see JapaneseTokenizer's doc comment for why
+        // there should only ever be one (it loads Kuromoji's ~28MB dictionary into memory).
+        val tokenizer = JapaneseTokenizer(dictionaryRepository)
+        bookImporter = BookImporter(database.wordDao(), tokenizer, importer)
+        singleSentenceImporter = SingleSentenceImporter(database.wordDao(), database.cardDao(), tokenizer, importer, translator)
 
         appScope.launch {
             if (sentenceRepository.count() == 0) {

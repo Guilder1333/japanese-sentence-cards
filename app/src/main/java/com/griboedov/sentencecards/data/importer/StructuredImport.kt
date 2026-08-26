@@ -64,6 +64,10 @@ sealed interface ImportResult {
  *  - [importParsed] - [ImportSentence]s already built in memory by
  *    [com.griboedov.sentencecards.data.importer.BookImporter] (the plain-text book import path)
  *    rather than deserialized from JSON, but written via the exact same batched DB-write core.
+ *  - [importOne] - a single already-tokenized sentence whose WORD tokens already carry a resolved
+ *    id (new or reused), for [com.griboedov.sentencecards.data.cards.SingleSentenceImporter] to
+ *    build a card from immediately afterward - so unlike the other three, this hands back the
+ *    written [SentenceEntity] (real DB id included) instead of just a summary count.
  */
 class SentenceImporter(
     private val wordDao: WordDao,
@@ -88,6 +92,33 @@ class SentenceImporter(
     }
 
     suspend fun importParsed(sentences: Sequence<ImportSentence>): ImportResult = importSentences(sentences)
+
+    /**
+     * Writes one already-tokenized [sentence] straight to the sentence pool and returns the
+     * resulting [SentenceEntity], real DB id included. Every WORD token in [sentence.structure] is
+     * expected to already carry the id it should reference (see [JapaneseTokenizer.tokenize]'s
+     * `resolveWordId` callback) - a [com.griboedov.sentencecards.data.db.WordEntity] row is created
+     * for any id not already present in the DB, and any that already exist are left untouched
+     * (so an id resolved to an already-tracked word doesn't clobber its existing progress).
+     */
+    suspend fun importOne(sentence: ImportSentence): SentenceEntity {
+        val wordIds = sentence.structure.mapNotNull { token ->
+            token.id.takeIf { TokenKind.fromCode(token.kind) == TokenKind.WORD }
+        }
+        val newWords = wordIds.distinct()
+            .filter { wordDao.getById(it) == null }
+            .mapNotNull { id -> sentence.structure.firstOrNull { it.id == id } }
+            .map { token -> WordEntity(id = token.id!!, word = token.word, furigana = token.furigana, translation = token.translation) }
+        if (newWords.isNotEmpty()) wordDao.upsertAll(newWords)
+
+        val text = sentence.text ?: sentence.structure.joinToString("") { it.word }
+        val entity = SentenceEntity(text = text, translation = sentence.translation, structure = sentence.structure)
+        val insertedId = sentenceDao.upsertAll(listOf(entity)).single()
+        if (wordIds.isNotEmpty()) {
+            sentenceDao.insertWordRefs(wordIds.distinct().map { SentenceWordCrossRef(sentenceId = insertedId, wordId = it) })
+        }
+        return entity.copy(id = insertedId)
+    }
 
     /**
      * Shared batch-processing core. [sentences] is consumed lazily in [batchSize]-sized chunks -

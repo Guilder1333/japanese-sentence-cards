@@ -121,6 +121,42 @@ fun splitLongQuotes(raw: String): List<String> {
 }
 
 /**
+ * The full per-sentence split [BookImporter] runs over a whole book, exposed as one step so
+ * [com.griboedov.sentencecards.data.cards.SingleSentenceImporter] can check "is this really just
+ * one sentence" against the exact same rule instead of a separate, looser one. Empty results (e.g.
+ * blank input) are dropped rather than returned as an empty-string "sentence".
+ */
+fun splitIntoCleanSentences(text: String, keepLongQuotes: Boolean = false): List<String> =
+    splitSentences(text)
+        .flatMap { if (keepLongQuotes) listOf(it) else splitLongQuotes(it) }
+        .map(::cleanSentence)
+        .filter { it.isNotEmpty() }
+
+sealed interface SingleSentenceCheck {
+    data class Ok(val sentence: String) : SingleSentenceCheck
+    data class Error(val message: String) : SingleSentenceCheck
+}
+
+/**
+ * Checks that [text] really is just one sentence, against the exact same splitting rule
+ * [splitIntoCleanSentences] applies to a whole book - for
+ * [com.griboedov.sentencecards.data.cards.SingleSentenceImporter]'s "import a single sentence"
+ * feature, which (unlike book import) needs to reject anything that isn't exactly one, rather than
+ * quietly importing every sentence it finds.
+ */
+fun checkSingleSentence(text: String): SingleSentenceCheck {
+    val sentences = splitIntoCleanSentences(text)
+    return when (sentences.size) {
+        0 -> SingleSentenceCheck.Error("Enter a sentence to import.")
+        1 -> SingleSentenceCheck.Ok(sentences.single())
+        else -> SingleSentenceCheck.Error(
+            "That looks like ${sentences.size} sentences, not one - only a single sentence can " +
+                "be imported this way. Use the book import above for more than one.",
+        )
+    }
+}
+
+/**
  * Plain-text books commonly wrap lines and/or use full-width spaces for ruby/indentation - none of
  * that is meaningful in a single flash-card sentence, so strip *all* whitespace, not only
  * leading/trailing.
