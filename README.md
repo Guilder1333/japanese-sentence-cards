@@ -209,6 +209,8 @@ A sentence must contain the word to even be a candidate for either step. Scoring
 - in the words table, not to-learn, furigana no longer forced (well known): +2
 - itself another to-learn word: +0 (a card should isolate the one new word, not stack several)
 
+The bonus sum is normalized to a 0..1 fraction of the maximum possible bonus (+2 per word token, i.e. sum / (word count * 2)), so sentences with different word counts are actually comparable - a long sentence full of well-known words shouldn't automatically outscore a short, tightly-focused one just by having more tokens to rack up bonus on. Ties (equal normalized score) favor fewer word tokens - a shorter sentence is simpler to review - then fall back to sentence id for determinism.
+
 A sentence already backing a card (reused or not) is excluded from step 2's candidates, so a sentence never backs two cards, and marking the same word to-learn again (e.g. after toggling it off and on) fills any remaining shortfall from the next-best batch rather than duplicating what's already there.
 
 # Notes

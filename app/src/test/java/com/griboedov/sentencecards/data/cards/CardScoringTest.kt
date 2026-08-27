@@ -28,43 +28,58 @@ private fun sentence(id: Long, structure: List<SentenceToken>) = SentenceEntity(
 class CardScoringTest {
 
     @Test
-    fun `a word missing from the words table scores +2`() {
+    fun `a word missing from the words table scores 1 (bonus 2 of a possible 2)`() {
         val score = scoreSentenceForWord(listOf(wordToken(1)), wordsById = emptyMap())
-        assertEquals(2, score)
+        assertEquals(1f, score)
     }
 
     @Test
-    fun `a known word still showing forced furigana scores +1`() {
+    fun `a known word still showing forced furigana scores 0point5 (bonus 1 of a possible 2)`() {
         val words = mapOf(1L to word(1, toLearn = false, forceFurigana = true))
-        assertEquals(1, scoreSentenceForWord(listOf(wordToken(1)), words))
+        assertEquals(0.5f, scoreSentenceForWord(listOf(wordToken(1)), words))
     }
 
     @Test
-    fun `a well-known word with no forced furigana scores +2`() {
+    fun `a well-known word with no forced furigana scores 1 (bonus 2 of a possible 2)`() {
         val words = mapOf(1L to word(1, toLearn = false, forceFurigana = false))
-        assertEquals(2, scoreSentenceForWord(listOf(wordToken(1)), words))
+        assertEquals(1f, scoreSentenceForWord(listOf(wordToken(1)), words))
     }
 
     @Test
     fun `another to-learn word scores 0`() {
         val words = mapOf(1L to word(1, toLearn = true, forceFurigana = true))
-        assertEquals(0, scoreSentenceForWord(listOf(wordToken(1)), words))
+        assertEquals(0f, scoreSentenceForWord(listOf(wordToken(1)), words))
     }
 
     @Test
-    fun `particles never contribute to the score`() {
+    fun `particles never contribute to the score, and a sentence with none scores 0`() {
         val score = scoreSentenceForWord(listOf(particleToken(), particleToken()), wordsById = emptyMap())
-        assertEquals(0, score)
+        assertEquals(0f, score)
     }
 
     @Test
-    fun `score sums every word token in the sentence`() {
+    fun `score is the bonus sum normalized by the max possible bonus (2 per word token)`() {
         val words = mapOf(
             1L to word(1, toLearn = false, forceFurigana = false), // +2
             2L to word(2, toLearn = true), // +0
         )
+        // 3 word tokens (1, 2, 3 - particles don't count towards the word total): max bonus 6.
         val structure = listOf(wordToken(1), particleToken(), wordToken(2), wordToken(3)) // 3 is unknown: +2
-        assertEquals(4, scoreSentenceForWord(structure, words))
+        assertEquals(4f / 6f, scoreSentenceForWord(structure, words))
+    }
+
+    @Test
+    fun `a shorter sentence can outscore a longer one carrying the same bonus`() {
+        val words = mapOf(
+            1L to word(1, toLearn = false, forceFurigana = false), // +2
+            2L to word(2, toLearn = true), // +0 - another to-learn word dilutes the longer sentence
+        )
+        // Both sentences have the same raw bonus sum (+2), but the short one packs it into a
+        // single word instead of diluting it across an extra 0-scoring word.
+        val short = scoreSentenceForWord(listOf(wordToken(1)), words) // 2/2
+        val long = scoreSentenceForWord(listOf(wordToken(1), wordToken(2)), words) // (2+0)/4
+        assertEquals(1f, short)
+        assertEquals(0.5f, long)
     }
 
     @Test
@@ -74,22 +89,35 @@ class CardScoringTest {
             2L to word(2, toLearn = true), // +0
         )
         val worst = sentence(1, listOf(wordToken(2))) // score 0
-        val mid = sentence(2, listOf(wordToken(1))) // score 2
-        val best = sentence(3, listOf(wordToken(1), wordToken(1))) // score 4
+        val mid = sentence(2, listOf(wordToken(1))) // score 1
+        val best = sentence(3, listOf(wordToken(1), wordToken(1))) // score 1, but tied with mid - see below
 
         val picked = pickBestSentences(listOf(worst, mid, best), words, limit = 2)
 
-        assertEquals(listOf(best.id, mid.id), picked.map { it.id })
+        assertEquals(listOf(mid.id, best.id), picked.map { it.id })
     }
 
     @Test
-    fun `pickBestSentences breaks ties by shorter structure, then by id`() {
+    fun `pickBestSentences breaks ties by fewer word tokens, then by id`() {
         val short = sentence(1, listOf(wordToken(1)))
-        val long = sentence(2, listOf(wordToken(1), particleToken()))
+        val long = sentence(2, listOf(wordToken(1), wordToken(1)))
         val shortHigherId = sentence(3, listOf(wordToken(1)))
 
         val picked = pickBestSentences(listOf(long, short, shortHigherId), wordsById = emptyMap(), limit = 3)
 
         assertEquals(listOf(short.id, shortHigherId.id, long.id), picked.map { it.id })
+    }
+
+    @Test
+    fun `pickBestSentences tiebreak counts word tokens, not structure size, so particle padding doesn't matter`() {
+        // Same single word token in both, but one is padded with particles. structure.size differs
+        // (3 vs 1) yet word count doesn't (1 each), so this should tie all the way through to id,
+        // not favor the sentence with fewer raw tokens.
+        val paddedWithParticles = sentence(1, listOf(wordToken(1), particleToken(), particleToken()))
+        val bareWord = sentence(2, listOf(wordToken(1)))
+
+        val picked = pickBestSentences(listOf(paddedWithParticles, bareWord), wordsById = emptyMap(), limit = 2)
+
+        assertEquals(listOf(paddedWithParticles.id, bareWord.id), picked.map { it.id })
     }
 }
