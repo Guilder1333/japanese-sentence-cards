@@ -1,5 +1,6 @@
 package com.griboedov.sentencecards.data.importer
 
+import com.atilika.kuromoji.ipadic.Token
 import com.atilika.kuromoji.ipadic.Tokenizer
 import com.griboedov.sentencecards.data.db.SentenceToken
 import com.griboedov.sentencecards.data.db.TokenKind
@@ -48,6 +49,13 @@ interface SentenceTokenizer {
  */
 class JapaneseTokenizer(private val dictionaryRepository: DictionaryRepository) : SentenceTokenizer {
     private val tokenizer by lazy { Tokenizer.Builder().build() }
+
+    /**
+     * The Dictionary screen's search terms for [text] - see [extractSearchTerms]. A plain
+     * (non-suspend) call: unlike [tokenize], nothing here needs a word id or a dictionary gloss, so
+     * there's no DB access at all, just Kuromoji itself.
+     */
+    fun splitIntoSearchTerms(text: String): List<String> = extractSearchTerms(tokenizer.tokenize(text), fallbackTerm = text)
 
     override suspend fun tokenize(
         sentence: String,
@@ -103,4 +111,35 @@ class JapaneseTokenizer(private val dictionaryRepository: DictionaryRepository) 
         cache[key] = result
         return result
     }
+}
+
+/**
+ * Extracts the Dictionary screen's search terms from already-tokenized Kuromoji [tokens]: one term
+ * per trackable word - the same [classifyToken] rule [JapaneseTokenizer.tokenize] uses to decide
+ * what counts as one - using each word's dictionary (base) form rather than however it happens to
+ * be inflected in the text (見た -> 見る), so a pasted/typed sentence searches every word it
+ * actually contains instead of being matched as one literal string. Katakana loanwords are kept
+ * too, by their surface form (no dictionary base form applies to those). Particles, punctuation,
+ * and hiragana/latin filler are skipped the same way they are on import.
+ *
+ * Falls back to [fallbackTerm] (the untokenized text, trimmed) as the sole term if that leaves
+ * nothing - e.g. an English meaning query, or otherwise kanji/katakana-free input - so plain
+ * single-term browsing (searching by meaning, or a bare kana word) keeps working unchanged.
+ *
+ * Pulled out as a standalone function taking already-tokenized [tokens], rather than a
+ * [JapaneseTokenizer] method - see [JapaneseTokenizer.splitIntoSearchTerms] for that - purely so
+ * it's unit-testable with a plain Kuromoji [Tokenizer], without needing the
+ * [com.griboedov.sentencecards.data.dictionary.DictionaryRepository]/Context [JapaneseTokenizer]
+ * itself requires.
+ */
+fun extractSearchTerms(tokens: List<Token>, fallbackTerm: String): List<String> {
+    val terms = LinkedHashSet<String>()
+    for (tok in tokens) {
+        when (classifyToken(tok.surface)) {
+            TokenKind.WORD -> terms += tok.baseForm?.takeIf { it != "*" } ?: tok.surface
+            TokenKind.KATAKANA -> terms += tok.surface
+            TokenKind.PARTICLE -> {}
+        }
+    }
+    return terms.toList().ifEmpty { listOfNotNull(fallbackTerm.trim().takeIf(String::isNotEmpty)) }
 }

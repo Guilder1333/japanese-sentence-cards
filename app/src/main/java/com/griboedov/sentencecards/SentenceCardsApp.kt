@@ -44,6 +44,8 @@ class SentenceCardsApp : Application() {
         private set
     lateinit var dictionaryRepository: DictionaryRepository
         private set
+    lateinit var japaneseTokenizer: JapaneseTokenizer
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -66,11 +68,11 @@ class SentenceCardsApp : Application() {
         cardRepository = CardRepository(database.cardDao())
         importer = SentenceImporter(database.wordDao(), database.sentenceDao())
         dictionaryRepository = DictionaryRepository(this)
-        // Shared across both parsing paths below - see JapaneseTokenizer's doc comment for why
-        // there should only ever be one (it loads Kuromoji's ~28MB dictionary into memory).
-        val tokenizer = JapaneseTokenizer(dictionaryRepository)
-        bookImporter = BookImporter(database.wordDao(), tokenizer, importer)
-        singleSentenceImporter = SingleSentenceImporter(database.wordDao(), database.cardDao(), tokenizer, importer, translator)
+        // Shared across every use below - see JapaneseTokenizer's doc comment for why there should
+        // only ever be one (it loads Kuromoji's ~28MB dictionary into memory).
+        japaneseTokenizer = JapaneseTokenizer(dictionaryRepository)
+        bookImporter = BookImporter(database.wordDao(), japaneseTokenizer, importer)
+        singleSentenceImporter = SingleSentenceImporter(database.wordDao(), database.cardDao(), japaneseTokenizer, importer, translator)
 
         appScope.launch {
             if (sentenceRepository.count() == 0) {

@@ -59,6 +59,33 @@ class DictionaryRepository(private val context: Context) {
             results.values.take(limit)
         }
 
+    /**
+     * [search], but for text made up of multiple words - typically a whole pasted/typed sentence,
+     * split into its per-word dictionary forms by
+     * [com.griboedov.sentencecards.data.importer.JapaneseTokenizer.splitIntoSearchTerms]. Each of
+     * [terms] is searched independently and the results are combined ("cumulative", per the
+     * feature's whole point - every word in the pasted text should contribute, not just whichever
+     * one a single combined query happened to match), deduped by kanji+kana spelling with
+     * first-occurrence order kept, so a word appearing later in the text can't get pushed out
+     * entirely by an earlier word's especially broad hit.
+     *
+     * [overallLimit] is split evenly across [terms] (floored at [MIN_PER_TERM_LIMIT] so a long
+     * sentence doesn't starve every word down to nothing) rather than handed to each term in full,
+     * so no single word's broad match can crowd out the others - for a single term this reduces to
+     * exactly [search]'s own behavior and limit.
+     */
+    suspend fun searchWords(terms: List<String>, overallLimit: Int = 50): List<DictionaryEntry> {
+        if (terms.isEmpty()) return emptyList()
+        val perTermLimit = (overallLimit / terms.size).coerceAtLeast(MIN_PER_TERM_LIMIT)
+        val merged = LinkedHashMap<Pair<String?, String>, DictionaryEntry>()
+        for (term in terms) {
+            for (entry in search(term, perTermLimit)) {
+                merged.putIfAbsent(entry.kanji to entry.kana, entry)
+            }
+        }
+        return merged.values.take(overallLimit)
+    }
+
     private fun collectExact(db: SQLiteDatabase, results: MutableMap<Long, DictionaryEntry>, indexTable: String, value: String) {
         db.rawQuery(
             "SELECT e.id, e.kanji, e.kana, e.meaning FROM dict_entries e " +
@@ -106,5 +133,9 @@ class DictionaryRepository(private val context: Context) {
                 database = it
             }
         }
+    }
+
+    private companion object {
+        const val MIN_PER_TERM_LIMIT = 5
     }
 }

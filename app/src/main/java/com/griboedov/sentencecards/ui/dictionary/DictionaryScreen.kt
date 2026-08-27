@@ -66,7 +66,7 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     val app = LocalContext.current.applicationContext as SentenceCardsApp
     val viewModel: DictionaryScreenViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { DictionaryScreenViewModel(app.dictionaryRepository, app.wordRepository) }
+            initializer { DictionaryScreenViewModel(app.dictionaryRepository, app.wordRepository, app.japaneseTokenizer) }
         },
     )
     val query by viewModel.query.collectAsStateWithLifecycle()

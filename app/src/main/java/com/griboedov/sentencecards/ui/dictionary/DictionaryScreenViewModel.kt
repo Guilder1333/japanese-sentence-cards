@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.griboedov.sentencecards.data.dictionary.DictionaryEntry
 import com.griboedov.sentencecards.data.dictionary.DictionaryRepository
+import com.griboedov.sentencecards.data.importer.JapaneseTokenizer
 import com.griboedov.sentencecards.data.repository.WordRepository
 import com.griboedov.sentencecards.data.repository.WordStatusChoice
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -19,6 +20,7 @@ import kotlinx.coroutines.launch
 class DictionaryScreenViewModel(
     private val dictionaryRepository: DictionaryRepository,
     private val wordRepository: WordRepository,
+    private val tokenizer: JapaneseTokenizer,
 ) : ViewModel() {
 
     private val _query = MutableStateFlow("")
@@ -53,12 +55,19 @@ class DictionaryScreenViewModel(
         search()
     }
 
+    /**
+     * Splits [q] into its constituent words (by dictionary/base form, not however each is
+     * inflected as typed - see [JapaneseTokenizer.splitIntoSearchTerms]) and searches all of them,
+     * combining the results - so pasting a whole sentence finds every word it contains instead of
+     * being matched as one literal (and almost always fruitless) string.
+     */
     fun search() {
         val q = _query.value.trim()
         if (q.isEmpty()) return
         viewModelScope.launch {
             _isSearching.value = true
-            _results.value = dictionaryRepository.search(q)
+            val terms = tokenizer.splitIntoSearchTerms(q)
+            _results.value = dictionaryRepository.searchWords(terms)
             _isSearching.value = false
             _hasSearched.value = true
         }
