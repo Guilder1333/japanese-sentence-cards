@@ -39,7 +39,7 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
     val viewModel: ReviewViewModel = viewModel(
         factory = viewModelFactory {
             initializer {
-                ReviewViewModel(app.cardRepository, app.wordRepository, app.dictionaryRepository)
+                ReviewViewModel(app.cardRepository, app.wordRepository, app.dictionaryRepository, app.cardGenerator)
             }
         },
     )

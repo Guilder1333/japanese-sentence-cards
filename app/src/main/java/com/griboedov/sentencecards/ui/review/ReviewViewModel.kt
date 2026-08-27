@@ -2,6 +2,7 @@ package com.griboedov.sentencecards.ui.review
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.griboedov.sentencecards.data.cards.CardGenerator
 import com.griboedov.sentencecards.data.db.CardEntity
 import com.griboedov.sentencecards.data.db.WordEntity
 import com.griboedov.sentencecards.data.dictionary.DictionaryEntry
@@ -61,6 +62,7 @@ class ReviewViewModel(
     private val cardRepository: CardRepository,
     private val wordRepository: WordRepository,
     private val dictionaryRepository: DictionaryRepository,
+    private val cardGenerator: CardGenerator,
 ) : ViewModel() {
     private val queueEngine = QueueEngine()
 
@@ -149,6 +151,23 @@ class ReviewViewModel(
                 id.takeIf { cardWords[id]?.forceFurigana == true }
             }
             wordRepository.recordShown(wordIds, furiganaShownIds)
+        }
+        retryTranslationIfNeeded(card)
+    }
+
+    /**
+     * A card can end up without a translation if the DeepL request failed when it was first
+     * created (e.g. no network at the time) - see [CardGenerator]'s doc comment. Rather than
+     * leaving it blank forever, every time such a card is shown this retries the translation in
+     * the background; [CardGenerator.translateCardIfNeeded] persists the result to both the
+     * sentence pool and the card, and the latter flows back into [uiState] via [cardRepository]'s
+     * observed [CardEntity] flow the same way any other card update does.
+     */
+    private fun retryTranslationIfNeeded(card: CardEntity) {
+        if (card.translation.isNotBlank()) return
+        viewModelScope.launch {
+            val translated = cardGenerator.translateCardIfNeeded(card)
+            if (translated.translation.isNotBlank()) cardRepository.update(translated)
         }
     }
 

@@ -251,4 +251,33 @@ class CardGeneratorTest {
         assertEquals("translated1", reused.translation)
         assertEquals("translated1", sentenceDao.byId.getValue(1L).translation)
     }
+
+    @Test
+    fun `translateCardIfNeeded retries a still-untranslated card, such as when shown again in review`() = runBlocking {
+        val sentences = listOf(sentence(1, 100L, translation = ""))
+        val refs = listOf(SentenceWordCrossRef(sentenceId = 1L, wordId = 100L))
+        val sentenceDao = FakeSentenceDao(sentences, refs)
+        val translator = FakeTranslator(result = "translated1")
+        val generator = CardGenerator(sentenceDao, FakeCardDao(), FakeWordDao(emptyList()), translator)
+        val untranslatedCard = card(id = 1L, sentenceId = 1L, mainWordIds = listOf(100L), translation = "")
+
+        val result = generator.translateCardIfNeeded(untranslatedCard)
+
+        assertEquals("translated1", result.translation)
+        assertEquals("translated1", sentenceDao.byId.getValue(1L).translation)
+    }
+
+    @Test
+    fun `translateCardIfNeeded leaves an already-translated card untouched and never calls the translator`() = runBlocking {
+        val sentences = listOf(sentence(1, 100L, translation = "already translated"))
+        val refs = listOf(SentenceWordCrossRef(sentenceId = 1L, wordId = 100L))
+        val translator = FakeTranslator()
+        val generator = CardGenerator(FakeSentenceDao(sentences, refs), FakeCardDao(), FakeWordDao(emptyList()), translator)
+        val translatedCard = card(id = 1L, sentenceId = 1L, mainWordIds = listOf(100L), translation = "already translated")
+
+        val result = generator.translateCardIfNeeded(translatedCard)
+
+        assertTrue(translator.requested.isEmpty())
+        assertEquals("already translated", result.translation)
+    }
 }

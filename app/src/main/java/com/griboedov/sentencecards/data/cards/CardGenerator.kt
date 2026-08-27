@@ -121,8 +121,14 @@ class CardGenerator(
         if (toUpdate.isNotEmpty()) cardDao.upsertAll(toUpdate)
     }
 
-    /** [translateIfNeeded]'s per-[CardEntity] counterpart, for backfilling an already-existing card being reused. */
-    private suspend fun translateCardIfNeeded(card: CardEntity): CardEntity {
+    /**
+     * [translateIfNeeded]'s per-[CardEntity] counterpart, for backfilling an already-existing card
+     * being reused. Also called directly by [com.griboedov.sentencecards.ui.review.ReviewViewModel]
+     * to retry a still-untranslated card each time it's shown in review - the most likely reason a
+     * card ended up without one is the translation request failing when the card was first created
+     * (e.g. no network at the time), and that's the next point it's ever revisited.
+     */
+    suspend fun translateCardIfNeeded(card: CardEntity): CardEntity {
         if (card.translation.isNotBlank()) return card
         val sentence = sentenceDao.getByIds(listOf(card.sentenceId)).firstOrNull() ?: return card
         val translated = translateIfNeeded(sentence)

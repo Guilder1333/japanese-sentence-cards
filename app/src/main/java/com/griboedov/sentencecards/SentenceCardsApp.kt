@@ -34,6 +34,8 @@ class SentenceCardsApp : Application() {
         private set
     lateinit var cardRepository: CardRepository
         private set
+    lateinit var cardGenerator: CardGenerator
+        private set
     lateinit var importer: SentenceImporter
         private set
     lateinit var bookImporter: BookImporter
@@ -58,7 +60,7 @@ class SentenceCardsApp : Application() {
             },
         )
         val translator = DeepLTranslator(BuildConfig.DEEPL_API_KEY)
-        val cardGenerator = CardGenerator(database.sentenceDao(), database.cardDao(), database.wordDao(), translator)
+        cardGenerator = CardGenerator(database.sentenceDao(), database.cardDao(), database.wordDao(), translator)
         wordRepository = WordRepository(database.wordDao(), cardGenerator)
         sentenceRepository = SentenceRepository(database.sentenceDao())
         cardRepository = CardRepository(database.cardDao())
