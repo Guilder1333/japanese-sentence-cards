@@ -76,8 +76,7 @@ class DictionaryScreenViewModel(
     fun addWord(entry: DictionaryEntry, status: WordStatusChoice) {
         viewModelScope.launch {
             val word = entry.kanji ?: entry.kana
-            val furigana = if (entry.kanji != null) entry.kana else null
-            wordRepository.addFromDictionary(word, furigana, entry.meaning, status)
+            wordRepository.addFromDictionary(word, entry.id, status)
             _message.value = "Added $word as ${status.label}"
         }
     }

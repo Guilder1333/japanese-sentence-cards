@@ -40,12 +40,12 @@ import kotlin.math.atan2
  * dictionary lookup.
  */
 @Composable
-fun FlickMenu(word: WordEntity, highlighted: WordDirection?) {
+fun FlickMenu(word: WordEntity, furigana: String?, highlighted: WordDirection?) {
     Surface(shape = CircleShape, tonalElevation = 8.dp, shadowElevation = 8.dp) {
         Box(modifier = Modifier.size(216.dp), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(word.word, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
-                word.furigana?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                furigana?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
             DirectionSlot(
                 alignment = Alignment.TopCenter,
@@ -79,10 +79,10 @@ fun FlickMenu(word: WordEntity, highlighted: WordDirection?) {
 fun directionFromOffset(offset: Offset, thresholdPx: Float): WordDirection? {
     if ((offset.x * offset.x + offset.y * offset.y) < thresholdPx * thresholdPx) return null
     val degrees = Math.toDegrees(atan2(offset.y.toDouble(), offset.x.toDouble()))
-    return when {
-        degrees in -45.0..45.0 -> WordDirection.RIGHT
-        degrees in 45.0..135.0 -> WordDirection.DOWN
-        degrees in -135.0..-45.0 -> WordDirection.UP
+    return when (degrees) {
+        in -45.0..45.0 -> WordDirection.RIGHT
+        in 45.0..135.0 -> WordDirection.DOWN
+        in -135.0..-45.0 -> WordDirection.UP
         else -> WordDirection.LEFT
     }
 }

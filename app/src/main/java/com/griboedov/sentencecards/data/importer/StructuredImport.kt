@@ -24,8 +24,8 @@ import kotlinx.serialization.json.decodeToSequence
  *   {
  *     "translation": "This word is English.",
  *     "structure": [
- *       { "word": "この", "translation": "this", "kind": 2 },
- *       { "word": "言葉", "furigana": "ことば", "translation": "word", "kind": 1, "id": 1234 }
+ *       { "word": "この", "kind": 2 },
+ *       { "word": "言葉", "furigana": "ことば", "kind": 1, "id": 1234, "dictionaryEntryId": 1358280 }
  *     ]
  *   }
  * ]
@@ -108,7 +108,9 @@ class SentenceImporter(
         val newWords = wordIds.distinct()
             .filter { wordDao.getById(it) == null }
             .mapNotNull { id -> sentence.structure.firstOrNull { it.id == id } }
-            .map { token -> WordEntity(id = token.id!!, word = token.word, furigana = token.furigana, translation = token.translation) }
+            .map { token ->
+                WordEntity(id = token.id!!, word = token.dictForm ?: token.word, dictionaryEntryId = token.dictionaryEntryId)
+            }
         if (newWords.isNotEmpty()) wordDao.upsertAll(newWords)
 
         val text = sentence.text ?: sentence.structure.joinToString("") { it.word }
@@ -161,9 +163,8 @@ class SentenceImporter(
                         if (knownWordIds.add(id)) {
                             newWords += WordEntity(
                                 id = id,
-                                word = token.word,
-                                furigana = token.furigana,
-                                translation = token.translation,
+                                word = token.dictForm ?: token.word,
+                                dictionaryEntryId = token.dictionaryEntryId,
                             )
                         }
                         wordIds += id

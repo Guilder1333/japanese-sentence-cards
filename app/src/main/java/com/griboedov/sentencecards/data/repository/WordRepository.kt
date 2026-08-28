@@ -83,13 +83,13 @@ class WordRepository(private val dao: WordDao, private val cardGenerator: CardGe
      * different status). This is how a dictionary entry becomes a real, trackable [WordEntity]:
      * dictionary browsing has no metrics of its own, only the internal table does.
      */
-    suspend fun addFromDictionary(word: String, furigana: String?, translation: String, status: WordStatusChoice): Long {
+    suspend fun addFromDictionary(word: String, dictionaryEntryId: Long, status: WordStatusChoice): Long {
         val existing = dao.findByWord(word)
-        val base = existing ?: WordEntity(id = (dao.maxId() ?: 0L) + 1, word = word, furigana = furigana, translation = translation)
+        val base = existing ?: WordEntity(id = (dao.maxId() ?: 0L) + 1, word = word, dictionaryEntryId = dictionaryEntryId)
         val updated = when (status) {
-            WordStatusChoice.KNOWN -> base.copy(translation = translation, toLearn = false, forceFurigana = false)
-            WordStatusChoice.TO_LEARN -> base.copy(translation = translation, toLearn = true)
-            WordStatusChoice.FORCE_FURIGANA -> base.copy(translation = translation, toLearn = false, forceFurigana = true)
+            WordStatusChoice.KNOWN -> base.copy(dictionaryEntryId = dictionaryEntryId, toLearn = false, forceFurigana = false)
+            WordStatusChoice.TO_LEARN -> base.copy(dictionaryEntryId = dictionaryEntryId, toLearn = true)
+            WordStatusChoice.FORCE_FURIGANA -> base.copy(dictionaryEntryId = dictionaryEntryId, toLearn = false, forceFurigana = true)
         }
         if (existing != null) dao.update(updated) else dao.upsert(updated)
         if (status == WordStatusChoice.TO_LEARN) cardGenerator.generateCardsForWord(updated.id)

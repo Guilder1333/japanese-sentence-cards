@@ -25,10 +25,10 @@ sealed interface SingleSentenceParseResult {
  *  - [parse] checks the text really is one sentence (same rule
  *    [com.griboedov.sentencecards.data.importer.BookImporter] uses for a whole book) and reports
  *    it back as an error rather than silently mangling multiple sentences into one card.
- *  - word ids are resolved against the words table by exact surface match first (same convention
- *    [com.griboedov.sentencecards.data.repository.WordRepository.addFromDictionary] already uses),
- *    reusing an already-tracked word's id instead of creating a duplicate - worth the extra DB
- *    lookups for one sentence in a way it isn't for a whole book.
+ *  - word ids are resolved against the words table by exact dictionary-form match first (same
+ *    convention [com.griboedov.sentencecards.data.repository.WordRepository.addFromDictionary]
+ *    already uses), reusing an already-tracked word's id instead of creating a duplicate - worth
+ *    the extra DB lookups for one sentence in a way it isn't for a whole book.
  */
 class SingleSentenceImporter(
     private val wordDao: WordDao,
@@ -50,8 +50,8 @@ class SingleSentenceImporter(
 
         var nextWordId = (wordDao.maxId() ?: 0L) + 1
         val wordIds = HashMap<String, Long>()
-        val structure = tokenizer.tokenize(sentence) { surface, _ ->
-            wordIds.getOrPut(surface) { wordDao.findByWord(surface)?.id ?: nextWordId++ }
+        val structure = tokenizer.tokenize(sentence) { _, dictForm ->
+            wordIds.getOrPut(dictForm) { wordDao.findByWord(dictForm)?.id ?: nextWordId++ }
         }
 
         val translation = translator.translate(sentence)?.takeIf { it.isNotBlank() } ?: ""

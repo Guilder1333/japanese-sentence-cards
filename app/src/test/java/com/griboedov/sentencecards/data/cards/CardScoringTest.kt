@@ -9,14 +9,12 @@ import org.junit.Test
 private fun word(id: Long, toLearn: Boolean = false, forceFurigana: Boolean = false) = WordEntity(
     id = id,
     word = "word$id",
-    furigana = null,
-    translation = "t$id",
     toLearn = toLearn,
     forceFurigana = forceFurigana,
 )
 
-private fun wordToken(id: Long) = SentenceToken(word = "w$id", translation = "", kind = 1, id = id)
-private fun particleToken() = SentenceToken(word = "は", translation = "topic marker", kind = 2)
+private fun wordToken(id: Long) = SentenceToken(word = "w$id", kind = 1, id = id)
+private fun particleToken() = SentenceToken(word = "は", kind = 2)
 
 private fun sentence(id: Long, structure: List<SentenceToken>) = SentenceEntity(
     id = id,

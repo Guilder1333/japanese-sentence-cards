@@ -42,6 +42,7 @@ fun QuizCardView(
     card: CardEntity,
     words: Map<Long, WordEntity>,
     options: Map<Long, List<String>>,
+    correctReadings: Map<Long, String>,
     answers: Map<Long, String>,
     allAnswered: Boolean,
     onSelect: (Long, String) -> Unit,
@@ -82,6 +83,7 @@ fun QuizCardView(
                 QuizQuestion(
                     word = word,
                     options = wordOptions,
+                    correctReading = correctReadings[wordId],
                     selected = answers[wordId],
                     onSelect = { option -> onSelect(wordId, option) },
                 )
@@ -98,6 +100,7 @@ fun QuizCardView(
 private fun QuizQuestion(
     word: WordEntity,
     options: List<String>,
+    correctReading: String?,
     selected: String?,
     onSelect: (String) -> Unit,
 ) {
@@ -105,7 +108,7 @@ private fun QuizQuestion(
         Text(word.word, style = MaterialTheme.typography.titleLarge, textAlign = TextAlign.Center)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             for (option in options) {
-                val isCorrectOption = option == word.furigana
+                val isCorrectOption = option == correctReading
                 val colors = when {
                     selected == null -> ButtonDefaults.filledTonalButtonColors()
                     isCorrectOption -> ButtonDefaults.buttonColors(containerColor = EasyPriority, contentColor = Color.White)

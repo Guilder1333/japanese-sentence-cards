@@ -74,6 +74,7 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
                             card = card,
                             words = state.words,
                             options = state.quizOptions,
+                            correctReadings = state.quizCorrectReadings,
                             answers = state.quizAnswers,
                             allAnswered = state.quizAllAnswered,
                             onSelect = viewModel::onQuizOptionSelected,

@@ -15,9 +15,15 @@ import androidx.room.PrimaryKey
 @Entity(tableName = "words")
 data class WordEntity(
     @PrimaryKey val id: Long,
+    /** Always this word's dictionary/citation form (e.g. "食べる", never "食べた") - see [com.griboedov.sentencecards.data.db.SentenceToken.dictForm]. */
     val word: String,
-    val furigana: String?,
-    val translation: String,
+    /**
+     * The bundled dictionary's stable entry id for this word (see [com.griboedov.sentencecards.data.dictionary.DictionaryEntry.id]),
+     * or null if nothing matched at the time this word was tracked. Reading and meaning are looked
+     * up through this reference rather than duplicated here - see
+     * [com.griboedov.sentencecards.data.dictionary.DictionaryRepository.getById]/`getByIds`.
+     */
+    val dictionaryEntryId: Long? = null,
     val timesShown: Int = 0,
     val timesFuriganaShown: Int = 0,
     val timesTranslationShown: Int = 0,

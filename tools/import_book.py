@@ -7,10 +7,10 @@ data/importer/StructuredImport.kt's ImportSentence/SentenceToken schema).
 Adapted from the sentence-picking logic in the japanese-flashcards-generator project's
 book_grabber.py / word_tokenizer.py / datasets.py, but reworked to:
   - walk *every* sentence in the book(s) instead of just ones containing specific target words,
-  - skip machine translation entirely (both per-sentence and, unless you pass --no-dictionary,
-    only fall back to the free local JMdict lookup for per-word glosses) - full-sentence MT via
-    DeepL/GPT is what actually costs money on a whole book, so it's left for a later pass; the
-    output's per-sentence "translation" is always "",
+  - skip machine translation entirely (both per-sentence and, unless you pass --no-dictionary, the
+    free local JMdict lookup used only to resolve each new word's dictionary entry id, not to
+    generate any gloss text) - full-sentence MT via DeepL/GPT is what actually costs money on a
+    whole book, so it's left for a later pass; the output's per-sentence "translation" is always "",
   - take a book file or a directory of book files as input.
 
 Setup:
@@ -58,19 +58,6 @@ CLOSE_BRACKETS = set("」』｣")
 # has run on this long, give up on depth-tracking for it and go back to splitting on plain
 # terminators.
 MAX_UNCLOSED_QUOTE_CHARS = 500
-
-# Small hand-picked table so common particles/copulas get a short gloss for free, instead of
-# either an empty string or a misleading JMdict hit (kana-only entries like "は" collide with
-# unrelated dictionary words - see README discussion in the PR/commit that added this script).
-PARTICLE_GLOSSES = {
-    "は": "topic marker", "が": "subject marker", "を": "object marker",
-    "に": "to/at/in", "で": "at/by/with", "の": "of/'s", "と": "and/with",
-    "も": "also/too", "や": "and/or", "へ": "towards", "から": "from/because",
-    "まで": "until/up to", "より": "than/from", "だ": "is/am/are", "です": "is/am/are",
-    "ね": "(seeking agreement)", "よ": "(emphasis)", "な": "(emphasis/prohibition)",
-    "か": "(question marker)", "けど": "but/though", "けれど": "but/though",
-    "ば": "if/when", "たら": "if/when", "ながら": "while", "し": "and (listing)",
-}
 
 
 def kata_to_hira(text: str) -> str:
@@ -263,7 +250,7 @@ class Dictionary:
 
     def __init__(self, db_path: Optional[str]):
         self._conn = None
-        self._cache: Dict[Tuple[Optional[str], Optional[str]], str] = {}
+        self._cache: Dict[Tuple[Optional[str], Optional[str]], Optional[int]] = {}
         if db_path and os.path.exists(db_path):
             self._conn = sqlite3.connect(db_path)
 
@@ -271,9 +258,10 @@ class Dictionary:
     def available(self) -> bool:
         return self._conn is not None
 
-    def gloss(self, kanji: Optional[str], kana: Optional[str]) -> str:
+    def entry_id(self, kanji: Optional[str], kana: Optional[str]) -> Optional[int]:
+        """The matching dict_entries.id (JMdict's stable ent_seq), or None if nothing matched."""
         if self._conn is None:
-            return ""
+            return None
         cache_key = (kanji, kana)
         if cache_key in self._cache:
             return self._cache[cache_key]
@@ -285,7 +273,7 @@ class Dictionary:
         row = None
         if kanji and kana:
             row = self._conn.execute(
-                "SELECT e.meaning FROM dict_entries e "
+                "SELECT e.id FROM dict_entries e "
                 "JOIN dict_kanji_index k ON k.entry_id = e.id "
                 "JOIN dict_kana_index r ON r.entry_id = e.id "
                 "WHERE k.text = ? AND r.text = ? LIMIT 1",
@@ -293,26 +281,18 @@ class Dictionary:
             ).fetchone()
         if row is None and kanji:
             row = self._conn.execute(
-                "SELECT e.meaning FROM dict_entries e JOIN dict_kanji_index i ON i.entry_id = e.id "
+                "SELECT e.id FROM dict_entries e JOIN dict_kanji_index i ON i.entry_id = e.id "
                 "WHERE i.text = ? LIMIT 1",
                 (kanji,),
             ).fetchone()
         if row is None and kana:
             row = self._conn.execute(
-                "SELECT e.meaning FROM dict_entries e JOIN dict_kana_index i ON i.entry_id = e.id "
+                "SELECT e.id FROM dict_entries e JOIN dict_kana_index i ON i.entry_id = e.id "
                 "WHERE i.text = ? LIMIT 1",
                 (kana,),
             ).fetchone()
 
-        result = ""
-        if row is not None:
-            # meaning looks like "1. (n) word; phrase; expression\n2. ..." - take just the first
-            # gloss of the first sense, to keep this a short label rather than a dictionary dump.
-            first_line = row[0].split("\n", 1)[0]
-            after_number = first_line.split(". ", 1)[-1]
-            after_pos = after_number.split(") ", 1)[-1] if after_number.startswith("(") else after_number
-            result = after_pos.split(";")[0].strip()
-
+        result = int(row[0]) if row is not None else None
         self._cache[cache_key] = result
         return result
 
@@ -341,13 +321,22 @@ def build_structure(tagger, sentence: str, dictionary: Dictionary, word_ids: Wor
 
         if kind == KIND_WORD:
             entry["id"] = word_ids.get(dict_form)
+            # Kept distinct from "word" (this token's inflected surface, needed to render the
+            # sentence as written) so the app can seed a brand-new tracked WordEntity's text with
+            # the dictionary form - same form stable_word_id hashed above - instead of whichever
+            # inflection happened to be the first sentence to introduce this id.
+            if dict_form != surface:
+                entry["dictForm"] = dict_form
             if reading:
                 entry["furigana"] = kata_to_hira(reading)
-            entry["translation"] = dictionary.gloss(dict_form, kata_to_hira(reading) if reading else None)
-        elif kind == KIND_KATAKANA:
-            entry["translation"] = dictionary.gloss(None, surface)
-        else:
-            entry["translation"] = PARTICLE_GLOSSES.get(surface, "")
+            # Same seed-only role as dictForm above - the id this becomes WordEntity.dictionaryEntryId
+            # for, the first time this word's id is encountered.
+            entry_id = dictionary.entry_id(dict_form, kata_to_hira(reading) if reading else None)
+            if entry_id is not None:
+                entry["dictionaryEntryId"] = entry_id
+        # Katakana/particle tokens are never tracked as WordEntity rows (see the app's
+        # StructuredImport.kt - only kind: 1 tokens get an id), so there's nothing to look up or
+        # seed for them.
 
         tokens.append(entry)
     return tokens
@@ -401,8 +390,8 @@ def main() -> None:
     parser.add_argument("--pattern", default="*.txt", help="Glob for picking book files inside a directory (default: *.txt)")
     parser.add_argument("--recursive", action="store_true", help="Recurse into subdirectories when input is a directory")
     parser.add_argument("--encoding", default="utf-8", help="Text encoding to try first (default: utf-8; falls back to utf-8-sig/shift_jis/cp932)")
-    parser.add_argument("--dict-db", default=DEFAULT_DICT_DB, help="Path to jmdict.db for free per-word glosses (default: the app's bundled copy)")
-    parser.add_argument("--no-dictionary", action="store_true", help="Skip dictionary lookups entirely; every word's translation is left empty")
+    parser.add_argument("--dict-db", default=DEFAULT_DICT_DB, help="Path to jmdict.db for resolving each new word's dictionary entry id (default: the app's bundled copy)")
+    parser.add_argument("--no-dictionary", action="store_true", help="Skip dictionary lookups entirely; every word's dictionaryEntryId is left unresolved")
     parser.add_argument("--min-chars", type=int, default=2, help="Drop sentences shorter than this many characters (default: 2)")
     parser.add_argument("--min-japanese-ratio", type=float, default=0.5, help="Drop sentences whose letters are less than this fraction kanji/kana (default: 0.5; some books mix in English/French sentences). Set to 0 to disable")
     parser.add_argument("--keep-duplicates", action="store_true", help="Keep exact-duplicate sentences instead of deduplicating (books tend to repeat phrases a lot)")
@@ -418,7 +407,7 @@ def main() -> None:
 
     dictionary = Dictionary(None if args.no_dictionary else args.dict_db)
     if not args.no_dictionary and not dictionary.available:
-        print(f"Warning: dictionary DB not found at {args.dict_db!r} - word translations will be left empty", file=sys.stderr)
+        print(f"Warning: dictionary DB not found at {args.dict_db!r} - dictionaryEntryId will be left unresolved for every word", file=sys.stderr)
 
     tagger = fugashi.Tagger()
     word_ids = WordIdCache()

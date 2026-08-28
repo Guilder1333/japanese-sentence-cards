@@ -153,11 +153,14 @@ rather than silent guessing.
     (`checkSingleSentence`/`splitIntoCleanSentences` in `BookText.kt`) rather than a separate,
     looser check - so what counts as "one sentence" is consistent between the two features, and a
     quote packing more than one sentence is correctly rejected here too, not just merged away.
-  - **Word id resolution does check the DB** (`wordDao.findByWord(surface)`), unlike book import -
+  - **Word id resolution does check the DB** (`wordDao.findByWord(dictForm)`), unlike book import -
     worth the extra per-word lookups for a single sentence, and specifically to avoid fragmenting
     an already-tracked word's progress into a second `WordEntity` right at the moment the user is
     deliberately hand-picking main words (same convention as
-    `WordRepository.addFromDictionary`'s reuse-by-exact-text-match).
+    `WordRepository.addFromDictionary`'s reuse-by-exact-text-match). Matched by dictionary form,
+    not surface, for the same reason a brand-new `WordEntity`'s `word` is seeded from
+    `SentenceToken.dictForm` rather than the inflected surface (see `data/db/SentenceToken.kt`) -
+    otherwise "食べた" wouldn't reuse an already-tracked "食べる".
   - **Translation happens at parse time**, not at card-creation time: the review view is specified
     to look like a normal card back (translation included), and nothing about the sentence changes
     between parsing and the user pressing Import, so there's no reason to translate twice. This
@@ -214,6 +217,49 @@ rather than silent guessing.
   meaning match is an unindexed scan over ~200k rows). Adding a result as known/to-learn/force-
   furigana upserts a row in the *internal* words table, matched by exact `word` text (kanji, or
   kana if the entry has no kanji) - adding the same word twice updates it in place rather than
-  creating a duplicate. The new word's `translation` is the dictionary's full multi-sense summary
-  (not trimmed to one line, unlike sentence-import translations), and it gets a freshly assigned
-  id the same way importer-created words do (`max known id + 1`).
+  creating a duplicate. The new word's `dictionaryEntryId` is set to exactly the entry the user
+  picked (see "WordEntity references the dictionary" below), and it gets a freshly assigned id the
+  same way importer-created words do (`max known id + 1`).
+
+- **WordEntity references the dictionary instead of duplicating it** (`data/db/WordEntity.kt`,
+  `data/dictionary/DictionaryRepository.kt`): per your follow-up, `WordEntity` no longer carries its
+  own `furigana`/`translation` text - it carries `dictionaryEntryId: Long?`, a reference to
+  `dict_entries.id` in the bundled dictionary (JMdict's own stable `ent_seq`, not a build-time
+  autoincrement - see `tools/build_dictionary.py` - so it stays valid across a rebuilt/updated
+  `jmdict.db`). Reading and meaning are looked up through that reference wherever they're actually
+  displayed (`DictionaryRepository.getById`/`getByIds`), rather than duplicated on every word - and
+  as a side effect this fixes a related bug: the old `furigana` text was seeded from whichever
+  sentence occurrence happened to introduce the word (e.g. "たべた", an *inflected* reading), not
+  the word's actual dictionary/citation-form reading ("たべる"); a dictionary reference is always
+  the citation-form reading, so the quiz now tests the right thing.
+  - `SentenceToken.translation` is gone entirely (not just moved) - it had zero UI consumers even
+    before this change (verified by grep - every visible per-word/per-sentence translation reads
+    `CardEntity.translation` or `WordEntity.translation`, never a token's own field); it existed only
+    to seed `WordEntity.translation` at import time, which no longer exists. `SentenceToken.furigana`
+    stays, though - it's this specific occurrence's actual (possibly inflected) reading, needed to
+    render ruby text correctly, which is a fundamentally different thing from a dictionary entry's
+    citation-form reading and can't be recovered from one (見た's reading isn't 見る's).
+  - `SentenceToken` gained `dictionaryEntryId: Long?` alongside the existing `dictForm: String?`
+    (from the earlier dictionary-form fix) - same seed-only role: only meaningful the first time a
+    WORD token's `id` is minted, ignored on every later token referencing an already-tracked id.
+    Following from removing `translation`, katakana/particle tokens no longer do a dictionary lookup
+    or hand-picked-table lookup at all during tokenize (`tools/import_book.py`'s `PARTICLE_GLOSSES`
+    and the app's mirror of it are removed) - neither kind is ever tracked as a `WordEntity` (only
+    `kind: 1` tokens get an `id`), so there was nothing left to seed.
+  - The reading-quiz's distractor pool (`data/quiz/QuizOptions.kt`) used to scan `WordEntity.furigana`
+    across every tracked word in memory; `readingOptions` now takes plain reading strings instead of
+    `WordEntity`, and `ReviewViewModel` resolves the whole tracked-word list's readings in one batched
+    `getByIds` call (`resolveReadings`) whenever the word list changes, rather than one dictionary
+    lookup per word. The word-menu's furigana display (`FlickMenu`) is unaffected by any of this - it
+    already gets the tapped *token's* reading (not a WordEntity/dictionary lookup) via
+    `FlashCardView`'s flick-gesture state, which is the contextually-correct one anyway.
+  - The Word Browser (`ui/words/WordBrowserViewModel.kt`) similarly batches a `getByIds` call across
+    the whole tracked-word list on every emission (small table, unlike the Dictionary tab's 200k-row
+    scan) and exposes `WordRow(word, dictionaryEntry)` pairs rather than raw `WordEntity`.
+  - The word menu's "Up" dictionary lookup (`ReviewViewModel.lookupDictionary`) now fetches the exact
+    entry via `dictionaryEntryId` when one was resolved, instead of re-searching by kanji+kana (which
+    could land on a different homograph than the one actually tracked); falls back to a fresh
+    kanji-only search only when nothing was resolved at tracking time.
+  - **Data loss accepted, not migrated**: per your explicit call, this schema change goes through
+    `AppDatabase`'s existing `fallbackToDestructiveMigration` like every prior schema change in this
+    project - no migration was written to carry forward already-tracked words' progress.

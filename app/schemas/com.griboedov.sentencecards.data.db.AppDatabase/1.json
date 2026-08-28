@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 1,
-    "identityHash": "c99fbe6d77dfa338b0f1860c48607543",
+    "identityHash": "77b92b35cd8711eb960791aeabc0c487",
     "entities": [
       {
         "tableName": "words",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `word` TEXT NOT NULL, `furigana` TEXT, `translation` TEXT NOT NULL, `timesShown` INTEGER NOT NULL, `timesFuriganaShown` INTEGER NOT NULL, `timesTranslationShown` INTEGER NOT NULL, `toLearn` INTEGER NOT NULL, `forceFurigana` INTEGER NOT NULL, `quizSuccess` INTEGER NOT NULL, `quizFails` INTEGER NOT NULL, PRIMARY KEY(`id`))",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER NOT NULL, `word` TEXT NOT NULL, `dictionaryEntryId` INTEGER, `timesShown` INTEGER NOT NULL, `timesFuriganaShown` INTEGER NOT NULL, `timesTranslationShown` INTEGER NOT NULL, `toLearn` INTEGER NOT NULL, `forceFurigana` INTEGER NOT NULL, `quizSuccess` INTEGER NOT NULL, `quizFails` INTEGER NOT NULL, PRIMARY KEY(`id`))",
         "fields": [
           {
             "fieldPath": "id",
@@ -21,15 +21,9 @@
             "notNull": true
           },
           {
-            "fieldPath": "furigana",
-            "columnName": "furigana",
-            "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "translation",
-            "columnName": "translation",
-            "affinity": "TEXT",
-            "notNull": true
+            "fieldPath": "dictionaryEntryId",
+            "columnName": "dictionaryEntryId",
+            "affinity": "INTEGER"
           },
           {
             "fieldPath": "timesShown",
@@ -239,7 +233,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'c99fbe6d77dfa338b0f1860c48607543')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '77b92b35cd8711eb960791aeabc0c487')"
     ]
   }
 }

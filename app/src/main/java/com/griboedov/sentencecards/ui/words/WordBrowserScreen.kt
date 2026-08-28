@@ -34,7 +34,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.griboedov.sentencecards.SentenceCardsApp
-import com.griboedov.sentencecards.data.db.WordEntity
 import com.griboedov.sentencecards.data.knowledge.KnowledgeLevel
 import com.griboedov.sentencecards.data.knowledge.knowledgeLevel
 import com.griboedov.sentencecards.ui.theme.wordStatusColor
@@ -48,19 +47,20 @@ fun WordBrowserScreen(modifier: Modifier = Modifier) {
     val app = LocalContext.current.applicationContext as SentenceCardsApp
     val viewModel: WordBrowserViewModel = viewModel(
         factory = viewModelFactory {
-            initializer { WordBrowserViewModel(app.wordRepository) }
+            initializer { WordBrowserViewModel(app.wordRepository, app.dictionaryRepository) }
         },
     )
-    val words by viewModel.words.collectAsStateWithLifecycle()
+    val rows by viewModel.rows.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
 
-    val filtered = remember(words, query) {
+    val filtered = remember(rows, query) {
         if (query.isBlank()) {
-            words
+            rows
         } else {
-            words.filter {
-                it.word.contains(query) || it.translation.contains(query, ignoreCase = true) ||
-                    it.furigana?.contains(query) == true
+            rows.filter { row ->
+                row.word.word.contains(query) ||
+                    row.dictionaryEntry?.meaning?.contains(query, ignoreCase = true) == true ||
+                    row.dictionaryEntry?.kana?.contains(query) == true
             }
         }
     }
@@ -75,7 +75,7 @@ fun WordBrowserScreen(modifier: Modifier = Modifier) {
             singleLine = true,
         )
         Text(
-            text = "${filtered.size} of ${words.size} words",
+            text = "${filtered.size} of ${rows.size} words",
             style = MaterialTheme.typography.labelMedium,
             modifier = Modifier.padding(vertical = 8.dp),
         )
@@ -83,11 +83,11 @@ fun WordBrowserScreen(modifier: Modifier = Modifier) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(bottom = 16.dp),
         ) {
-            items(filtered, key = { it.id }) { word ->
-                WordRow(
-                    word = word,
-                    onToLearnChange = { viewModel.setToLearn(word.id, it) },
-                    onForceFuriganaChange = { viewModel.setForceFurigana(word.id, it) },
+            items(filtered, key = { it.word.id }) { row ->
+                WordRowCard(
+                    row = row,
+                    onToLearnChange = { viewModel.setToLearn(row.word.id, it) },
+                    onForceFuriganaChange = { viewModel.setForceFurigana(row.word.id, it) },
                 )
             }
         }
@@ -95,16 +95,17 @@ fun WordBrowserScreen(modifier: Modifier = Modifier) {
 }
 
 @Composable
-private fun WordRow(
-    word: WordEntity,
+private fun WordRowCard(
+    row: WordRow,
     onToLearnChange: (Boolean) -> Unit,
     onForceFuriganaChange: (Boolean) -> Unit,
 ) {
+    val word = row.word
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(modifier = Modifier.weight(1f)) {
-                    word.furigana?.let {
+                    row.dictionaryEntry?.kana?.let {
                         Text(it, style = MaterialTheme.typography.labelSmall)
                     }
                     Text(
@@ -112,7 +113,7 @@ private fun WordRow(
                         style = MaterialTheme.typography.headlineSmall,
                         color = wordStatusColor(word) ?: Color.Unspecified,
                     )
-                    Text(word.translation, style = MaterialTheme.typography.bodyMedium)
+                    Text(row.dictionaryEntry?.meaning ?: "", style = MaterialTheme.typography.bodyMedium)
                 }
                 KnowledgeBadge(word.knowledgeLevel())
             }

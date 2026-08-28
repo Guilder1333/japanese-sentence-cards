@@ -55,24 +55,42 @@ class StructuredImportTest {
         val wordDao = FakeWordDao()
         val sentenceDao = FakeSentenceDao()
         val importer = SentenceImporter(wordDao, sentenceDao)
-        val token = SentenceToken(word = "言葉", translation = "word", kind = TokenKind.WORD.code, furigana = "ことば", id = 42L)
+        val token = SentenceToken(
+            word = "言葉",
+            kind = TokenKind.WORD.code,
+            furigana = "ことば",
+            id = 42L,
+            dictionaryEntryId = 1358280L,
+        )
 
         val result = importer.importOne(ImportSentence(translation = "", structure = listOf(token)))
 
         assertTrue(result.id != 0L)
-        assertEquals(WordEntity(id = 42L, word = "言葉", furigana = "ことば", translation = "word"), wordDao.byId[42L])
+        assertEquals(WordEntity(id = 42L, word = "言葉", dictionaryEntryId = 1358280L), wordDao.byId[42L])
         assertEquals(listOf(SentenceWordCrossRef(sentenceId = result.id, wordId = 42L)), sentenceDao.wordRefs)
     }
 
     @Test
+    fun `importOne seeds a new WordEntity's text from dictForm, not the inflected surface`() = runBlocking {
+        val wordDao = FakeWordDao()
+        val sentenceDao = FakeSentenceDao()
+        val importer = SentenceImporter(wordDao, sentenceDao)
+        val token = SentenceToken(word = "食べた", dictForm = "食べる", kind = TokenKind.WORD.code, id = 42L)
+
+        importer.importOne(ImportSentence(translation = "", structure = listOf(token)))
+
+        assertEquals("食べる", wordDao.byId.getValue(42L).word)
+    }
+
+    @Test
     fun `importOne leaves an already-tracked word's entity untouched`() = runBlocking {
-        val existing = WordEntity(id = 42L, word = "言葉", furigana = "ことば", translation = "word", toLearn = true)
+        val existing = WordEntity(id = 42L, word = "言葉", dictionaryEntryId = 1358280L, toLearn = true)
         val wordDao = FakeWordDao(listOf(existing))
         val sentenceDao = FakeSentenceDao()
         val importer = SentenceImporter(wordDao, sentenceDao)
-        // A token referencing the same id, but (hypothetically) different text/gloss - should not
+        // A token referencing the same id, but (hypothetically) different text/entry - should not
         // overwrite the existing WordEntity's data or its toLearn/progress state.
-        val token = SentenceToken(word = "言葉", translation = "different gloss", kind = TokenKind.WORD.code, id = 42L)
+        val token = SentenceToken(word = "言葉", kind = TokenKind.WORD.code, id = 42L, dictionaryEntryId = 999L)
 
         importer.importOne(ImportSentence(translation = "", structure = listOf(token)))
 
@@ -85,9 +103,9 @@ class StructuredImportTest {
         val sentenceDao = FakeSentenceDao()
         val importer = SentenceImporter(wordDao, sentenceDao)
         val structure = listOf(
-            SentenceToken(word = "これ", translation = "", kind = TokenKind.PARTICLE.code),
-            SentenceToken(word = "は", translation = "", kind = TokenKind.PARTICLE.code),
-            SentenceToken(word = "文", translation = "sentence", kind = TokenKind.WORD.code, id = 1L),
+            SentenceToken(word = "これ", kind = TokenKind.PARTICLE.code),
+            SentenceToken(word = "は", kind = TokenKind.PARTICLE.code),
+            SentenceToken(word = "文", kind = TokenKind.WORD.code, id = 1L),
         )
 
         val result = importer.importOne(ImportSentence(translation = "", structure = structure))
@@ -100,11 +118,33 @@ class StructuredImportTest {
         val wordDao = FakeWordDao()
         val sentenceDao = FakeSentenceDao()
         val importer = SentenceImporter(wordDao, sentenceDao)
-        val token = SentenceToken(word = "は", translation = "topic marker", kind = TokenKind.PARTICLE.code)
+        val token = SentenceToken(word = "は", kind = TokenKind.PARTICLE.code)
 
         importer.importOne(ImportSentence(text = "は", translation = "", structure = listOf(token)))
 
         assertTrue(wordDao.byId.isEmpty())
         assertFalse(sentenceDao.wordRefs.isNotEmpty())
+    }
+
+    @Test
+    fun `importJson seeds a new WordEntity's text and dictionary reference too`() = runBlocking {
+        val wordDao = FakeWordDao()
+        val sentenceDao = FakeSentenceDao()
+        val importer = SentenceImporter(wordDao, sentenceDao)
+        val rawJson = """
+            [
+              {
+                "translation": "I ate.",
+                "structure": [
+                  { "word": "食べた", "dictForm": "食べる", "dictionaryEntryId": 1358280, "kind": 1, "id": 42 }
+                ]
+              }
+            ]
+        """.trimIndent()
+
+        val result = importer.importJson(rawJson)
+
+        assertTrue(result is ImportResult.Success)
+        assertEquals(WordEntity(id = 42L, word = "食べる", dictionaryEntryId = 1358280L), wordDao.byId[42L])
     }
 }

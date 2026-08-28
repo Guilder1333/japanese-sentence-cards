@@ -73,6 +73,10 @@ fun FlashCardView(
     // a plain layer within this same composition/window - not a separate Popup window, which
     // would risk swallowing the drag events that are still arriving at the word's pointerInput.
     var flickWord by remember(card.id) { mutableStateOf<WordEntity?>(null) }
+    // The tapped token's own (possibly inflected) reading - see CardBack below - rather than a
+    // dictionary-form reading looked up by id, since FlickMenu should show exactly what's on the
+    // card, not a citation-form reading that may not even match how this occurrence reads.
+    var flickFurigana by remember(card.id) { mutableStateOf<String?>(null) }
     var flickDirection by remember(card.id) { mutableStateOf<WordDirection?>(null) }
 
     Card(
@@ -111,7 +115,7 @@ fun FlashCardView(
                         card = card,
                         words = words,
                         onWordTap = { word -> onWordTap(word.id) },
-                        onFlickStart = { flickWord = it; flickDirection = null },
+                        onFlickStart = { word, furigana -> flickWord = word; flickFurigana = furigana; flickDirection = null },
                         onFlickDirectionChange = { flickDirection = it },
                         onFlickEnd = { commit ->
                             val word = flickWord
@@ -120,10 +124,11 @@ fun FlashCardView(
                                 onWordDirection(word.id, direction)
                             }
                             flickWord = null
+                            flickFurigana = null
                             flickDirection = null
                         },
                     )
-                    flickWord?.let { word -> FlickMenu(word = word, highlighted = flickDirection) }
+                    flickWord?.let { word -> FlickMenu(word = word, furigana = flickFurigana, highlighted = flickDirection) }
                 }
             }
         }
@@ -164,7 +169,7 @@ private fun CardBack(
     card: CardEntity,
     words: Map<Long, WordEntity>,
     onWordTap: (WordEntity) -> Unit,
-    onFlickStart: (WordEntity) -> Unit,
+    onFlickStart: (WordEntity, furigana: String?) -> Unit,
     onFlickDirectionChange: (WordDirection?) -> Unit,
     onFlickEnd: (committed: Boolean) -> Unit,
 ) {
@@ -191,7 +196,7 @@ private fun CardBack(
                             detectDragGesturesAfterLongPress(
                                 onDragStart = {
                                     total = Offset.Zero
-                                    onFlickStart(word)
+                                    onFlickStart(word, token.furigana)
                                 },
                                 onDrag = { change, amount ->
                                     change.consume()

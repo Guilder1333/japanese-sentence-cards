@@ -85,7 +85,7 @@ private class FakeWordDao(words: List<WordEntity>) : WordDao {
     override suspend fun count(): Int = byId.size
 }
 
-private fun wordToken(id: Long) = SentenceToken(word = "w$id", translation = "", kind = 1, id = id)
+private fun wordToken(id: Long) = SentenceToken(word = "w$id", kind = 1, id = id)
 
 private fun sentence(id: Long, vararg wordIds: Long, translation: String = "translation$id") = SentenceEntity(
     id = id,

@@ -73,6 +73,18 @@ private object SsiFakeTokenizer : SentenceTokenizer {
         error("SingleSentenceImporter.parse() isn't exercised by these tests - only importAsCard()")
 }
 
+/**
+ * A fake standing in for [JapaneseTokenizer]/Kuromoji for [SingleSentenceImporter.parse] tests -
+ * treats [sentence] as one inflected WORD token, with a caller-supplied dictionary form (the way a
+ * real tokenizer would resolve "食べた" back to "食べる").
+ */
+private class SsiFakeInflectingTokenizer(private val surface: String, private val dictForm: String) : SentenceTokenizer {
+    override suspend fun tokenize(sentence: String, resolveWordId: suspend (String, String) -> Long): List<SentenceToken> {
+        val id = resolveWordId(surface, dictForm)
+        return listOf(SentenceToken(word = surface, dictForm = dictForm, kind = TokenKind.WORD.code, id = id))
+    }
+}
+
 class SingleSentenceImporterTest {
 
     @Test
@@ -84,10 +96,10 @@ class SingleSentenceImporterTest {
         val importer = SingleSentenceImporter(wordDao, cardDao, SsiFakeTokenizer, sentenceImporter)
 
         val structure = listOf(
-            SentenceToken(word = "これ", translation = "", kind = TokenKind.PARTICLE.code),
-            SentenceToken(word = "は", translation = "topic marker", kind = TokenKind.PARTICLE.code),
-            SentenceToken(word = "文", translation = "sentence", kind = TokenKind.WORD.code, id = 1L),
-            SentenceToken(word = "です", translation = "is/am/are", kind = TokenKind.PARTICLE.code),
+            SentenceToken(word = "これ", kind = TokenKind.PARTICLE.code),
+            SentenceToken(word = "は", kind = TokenKind.PARTICLE.code),
+            SentenceToken(word = "文", kind = TokenKind.WORD.code, id = 1L),
+            SentenceToken(word = "です", kind = TokenKind.PARTICLE.code),
         )
 
         importer.importAsCard(
@@ -116,10 +128,26 @@ class SingleSentenceImporterTest {
         val cardDao = SsiFakeCardDao()
         val sentenceImporter = SentenceImporter(wordDao, sentenceDao)
         val importer = SingleSentenceImporter(wordDao, cardDao, SsiFakeTokenizer, sentenceImporter)
-        val structure = listOf(SentenceToken(word = "文", translation = "sentence", kind = TokenKind.WORD.code, id = 1L))
+        val structure = listOf(SentenceToken(word = "文", kind = TokenKind.WORD.code, id = 1L))
 
         importer.importAsCard(sentenceText = "文", structure = structure, translation = "sentence", mainWordIds = emptySet())
 
         assertEquals(emptyList<Long>(), cardDao.cards.single().mainWordIds)
+    }
+
+    @Test
+    fun `parse resolves an inflected word to an already-tracked word by its dictionary form`() = runBlocking {
+        val wordDao = SsiFakeWordDao()
+        wordDao.byId[1L] = WordEntity(id = 1L, word = "食べる")
+        val sentenceDao = SsiFakeSentenceDao()
+        val cardDao = SsiFakeCardDao()
+        val sentenceImporter = SentenceImporter(wordDao, sentenceDao)
+        val tokenizer = SsiFakeInflectingTokenizer(surface = "食べた", dictForm = "食べる")
+        val importer = SingleSentenceImporter(wordDao, cardDao, tokenizer, sentenceImporter)
+
+        val result = importer.parse("食べた。") as SingleSentenceParseResult.Ok
+
+        // Reuses the existing "食べる" WordEntity's id instead of minting a new one for "食べた".
+        assertEquals(1L, result.structure.single().id)
     }
 }

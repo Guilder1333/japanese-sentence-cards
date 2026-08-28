@@ -113,32 +113,37 @@ Schema example
 [
   {
     "word": "この",
-    "translation": "this",
     "kind": 2
   },
   {
     "word": "言葉",
     "furigana": "ことば",
-    "translation": "word",
     "kind": 1,
-    "id": 1234
+    "id": 1234,
+    "dictionaryEntryId": 1358280
   },
   {
     "word": "は",
-    "translation": "is",
     "kind": 2
   },
   {
     "word": "イギリス",
-    "translation": "english",
     "kind": 3
   },
   {
     "word": "語",
     "furigana": "ご",
-    "translation": "language",
     "kind": 1,
-    "id": 12354
+    "id": 12354,
+    "dictionaryEntryId": 1421850
+  },
+  {
+    "word": "食べた",
+    "dictForm": "食べる",
+    "furigana": "たべた",
+    "kind": 1,
+    "id": 98765,
+    "dictionaryEntryId": 1358280
   }
 ]
 ```
@@ -147,7 +152,18 @@ There might be more fields to represent what kind of particle is this word, or s
 
 So, point is that the sentence is being parsed and stored as separate items.
 
-ID is assigned to the word present in database.
+ID is assigned to the word present in database. For a `kind: 1` (word) token, the id is derived
+from the word's **dictionary form**, not its surface form as written in the sentence - "食べた"
+("ate") and "食べる" ("eat") are the same tracked word. `word` stays whatever inflected form is
+actually in the sentence (needed to render it correctly, since that's what's actually written);
+`furigana` is that same occurrence's actual reading, for the same reason. `dictForm` and
+`dictionaryEntryId` carry the dictionary form and the bundled dictionary's matching entry id
+separately - present when they differ from/aren't derivable from `word` - and are what seed the
+tracked word's text and dictionary reference the first time that id is encountered, so the
+words-to-learn list shows dictionary forms (and can look up reading/meaning through the dictionary
+by reference) instead of whatever inflection happened to be imported first. Neither is a per-token
+gloss - the tracked word's reading and meaning are always looked up through `dictionaryEntryId`,
+never duplicated in the sentence structure itself.
 
 #### Adding sentence
 

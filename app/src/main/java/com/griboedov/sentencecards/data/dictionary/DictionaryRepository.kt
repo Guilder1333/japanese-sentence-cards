@@ -8,6 +8,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 data class DictionaryEntry(
+    /**
+     * `dict_entries.id` - JMdict's own stable entry sequence number (`ent_seq`), carried straight
+     * through from the jmdict-simplified source by `tools/build_dictionary.py`, not a build-time
+     * autoincrement - safe to persist elsewhere (see [com.griboedov.sentencecards.data.db.WordEntity.dictionaryEntryId])
+     * as a reference that stays valid across a rebuilt/updated `jmdict.db`.
+     */
+    val id: Long,
     val kanji: String?,
     val kana: String,
     /** Pre-formatted "1. (pos) gloss; gloss\n2. ..." summary - see tools/build_dictionary.py. */
@@ -37,6 +44,29 @@ class DictionaryRepository(private val context: Context) {
             if (!kana.isNullOrBlank()) collectExact(db, results, "dict_kana_index", kana)
             results.values.take(limit)
         }
+
+    /** The single entry for a stable [DictionaryEntry.id] previously resolved by [lookup]/[search], or null if it's gone missing (e.g. a rebuilt jmdict.db). */
+    suspend fun getById(id: Long): DictionaryEntry? = getByIds(listOf(id))[id]
+
+    /**
+     * Batched counterpart to [getById] - one query for every id in [ids] instead of one per word,
+     * for callers resolving a whole list of tracked [com.griboedov.sentencecards.data.db.WordEntity]
+     * rows at once (the Word Browser, the review screen's reading-quiz pool). Chunked at
+     * [MAX_IDS_PER_QUERY] since SQLite caps the number of `?` placeholders in one statement.
+     */
+    suspend fun getByIds(ids: Collection<Long>): Map<Long, DictionaryEntry> = withContext(Dispatchers.IO) {
+        if (ids.isEmpty()) return@withContext emptyMap()
+        val db = openDatabase()
+        val results = LinkedHashMap<Long, DictionaryEntry>()
+        for (chunk in ids.distinct().chunked(MAX_IDS_PER_QUERY)) {
+            val placeholders = chunk.joinToString(",") { "?" }
+            db.rawQuery(
+                "SELECT id, kanji, kana, meaning FROM dict_entries WHERE id IN ($placeholders)",
+                chunk.map { it.toString() }.toTypedArray(),
+            ).use { cursor -> readInto(cursor, results) }
+        }
+        results
+    }
 
     /**
      * Browses the dictionary by [query]: an exact/prefix match on any kanji or kana spelling
@@ -107,6 +137,7 @@ class DictionaryRepository(private val context: Context) {
             val id = cursor.getLong(0)
             if (results.containsKey(id)) continue
             results[id] = DictionaryEntry(
+                id = id,
                 kanji = cursor.getString(1),
                 kana = cursor.getString(2),
                 meaning = cursor.getString(3),
@@ -137,5 +168,8 @@ class DictionaryRepository(private val context: Context) {
 
     private companion object {
         const val MIN_PER_TERM_LIMIT = 5
+
+        /** SQLite's default SQLITE_MAX_VARIABLE_NUMBER is 999 on older builds - stay comfortably under it. */
+        const val MAX_IDS_PER_QUERY = 500
     }
 }

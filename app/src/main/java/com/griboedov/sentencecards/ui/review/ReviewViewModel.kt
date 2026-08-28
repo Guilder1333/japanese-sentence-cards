@@ -40,6 +40,8 @@ data class ReviewUiState(
     val isEmpty: Boolean = false,
     /** wordId -> shuffled reading options, for every quizzable word in the current quiz card. */
     val quizOptions: Map<Long, List<String>> = emptyMap(),
+    /** wordId -> that word's correct reading, for every word in [quizOptions] - see [readingOptions]. */
+    val quizCorrectReadings: Map<Long, String> = emptyMap(),
     /** wordId -> the option picked so far this round. */
     val quizAnswers: Map<Long, String> = emptyMap(),
     val dictionaryLookup: DictionaryLookup = DictionaryLookup.Hidden,
@@ -68,6 +70,8 @@ class ReviewViewModel(
 
     private var allCards: List<CardEntity> = emptyList()
     private var allWords: Map<Long, WordEntity> = emptyMap()
+    /** wordId -> dictionary-form reading, resolved from [WordEntity.dictionaryEntryId] - see [resolveReadings]. */
+    private var allWordReadings: Map<Long, String> = emptyMap()
     private var currentCardId: Long? = null
     private var lastCountedShownId: Long? = null
 
@@ -81,9 +85,23 @@ class ReviewViewModel(
             }.collect { (cards, words) ->
                 allCards = cards
                 allWords = words.associateBy { it.id }
+                allWordReadings = resolveReadings(words)
                 refresh()
             }
         }
+    }
+
+    /**
+     * Batched, not per-word: the reading quiz's distractor pool needs every tracked word's reading
+     * in memory at once (see [buildQuizOptions]), so this resolves the whole list's
+     * [WordEntity.dictionaryEntryId]s in one query rather than one dictionary lookup per word.
+     */
+    private suspend fun resolveReadings(words: List<WordEntity>): Map<Long, String> {
+        val entryIds = words.mapNotNull { it.dictionaryEntryId }
+        val entries = dictionaryRepository.getByIds(entryIds)
+        return words.mapNotNull { word ->
+            word.dictionaryEntryId?.let(entries::get)?.kana?.let { reading -> word.id to reading }
+        }.toMap()
     }
 
     private fun refresh() {
@@ -112,6 +130,11 @@ class ReviewViewModel(
                     sameCard -> prev.quizOptions
                     else -> buildQuizOptions(card)
                 },
+                quizCorrectReadings = when {
+                    !card.pendingQuiz -> emptyMap()
+                    sameCard -> prev.quizCorrectReadings
+                    else -> card.mainWordIds.mapNotNull { id -> allWordReadings[id]?.let { id to it } }.toMap()
+                },
                 quizAnswers = if (sameCard) prev.quizAnswers else emptyMap(),
                 // Rebuilt from scratch on every sentences/words change (e.g. any metric write,
                 // including the one this very dialog's word-tap triggers) - without carrying this
@@ -127,12 +150,12 @@ class ReviewViewModel(
         }
     }
 
-    /** One multiple-choice reading question per main word that actually has a furigana to quiz. */
+    /** One multiple-choice reading question per main word that actually has a known reading to quiz. */
     private fun buildQuizOptions(card: CardEntity): Map<Long, List<String>> {
-        val pool = allWords.values
+        val pool = allWordReadings.values
         return card.mainWordIds.mapNotNull { id ->
-            val word = allWords[id] ?: return@mapNotNull null
-            val options = readingOptions(word, pool) ?: return@mapNotNull null
+            val correct = allWordReadings[id] ?: return@mapNotNull null
+            val options = readingOptions(correct, pool) ?: return@mapNotNull null
             id to options
         }.toMap()
     }
@@ -210,7 +233,13 @@ class ReviewViewModel(
         _uiState.update { it.copy(dictionaryLookup = DictionaryLookup.Loading(word.word)) }
         viewModelScope.launch {
             val result = try {
-                DictionaryLookup.Loaded(word.word, dictionaryRepository.lookup(kanji = word.word, kana = word.furigana))
+                // Prefer the exact entry already resolved for this word (see
+                // WordEntity.dictionaryEntryId) over a fresh kanji-only search, which can land on a
+                // different homograph than the one actually tracked; only fall back to a fresh
+                // search when nothing was resolved at tracking time.
+                val entries = word.dictionaryEntryId?.let { id -> dictionaryRepository.getById(id)?.let(::listOf) }
+                    ?: dictionaryRepository.lookup(kanji = word.word, kana = null)
+                DictionaryLookup.Loaded(word.word, entries)
             } catch (e: Exception) {
                 DictionaryLookup.Failed(word.word, e.message ?: e::class.simpleName ?: "Lookup failed")
             }
@@ -248,8 +277,8 @@ class ReviewViewModel(
                     correctIds += wordId // no furigana to quiz - nothing to test, passes through
                     continue
                 }
-                val word = allWords[wordId]
-                val correct = word != null && state.quizAnswers[wordId] == word.furigana
+                val correctReading = state.quizCorrectReadings[wordId]
+                val correct = correctReading != null && state.quizAnswers[wordId] == correctReading
                 wordRepository.recordQuizResult(wordId, correct)
                 if (correct) correctIds += wordId
             }
