@@ -6,6 +6,7 @@ import com.griboedov.sentencecards.data.cards.CardGenerator
 import com.griboedov.sentencecards.data.cards.SingleSentenceImporter
 import com.griboedov.sentencecards.data.db.AppDatabase
 import com.griboedov.sentencecards.data.dictionary.DictionaryRepository
+import com.griboedov.sentencecards.data.dictionary.KanjiRepository
 import com.griboedov.sentencecards.data.importer.BookImporter
 import com.griboedov.sentencecards.data.importer.JapaneseTokenizer
 import com.griboedov.sentencecards.data.importer.SentenceImporter
@@ -44,6 +45,8 @@ class SentenceCardsApp : Application() {
         private set
     lateinit var dictionaryRepository: DictionaryRepository
         private set
+    lateinit var kanjiRepository: KanjiRepository
+        private set
     lateinit var japaneseTokenizer: JapaneseTokenizer
         private set
 
@@ -68,6 +71,7 @@ class SentenceCardsApp : Application() {
         cardRepository = CardRepository(database.cardDao())
         importer = SentenceImporter(database.wordDao(), database.sentenceDao())
         dictionaryRepository = DictionaryRepository(this)
+        kanjiRepository = KanjiRepository(this)
         // Shared across every use below - see JapaneseTokenizer's doc comment for why there should
         // only ever be one (it loads Kuromoji's ~28MB dictionary into memory).
         japaneseTokenizer = JapaneseTokenizer(dictionaryRepository)

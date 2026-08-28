@@ -22,7 +22,9 @@ build/
 */build/
 .gradle/
 /tools/jmdict-*.json
+/tools/kanjidic2-*.json
 /app/src/main/assets/dictionary/jmdict.db
+/app/src/main/assets/dictionary/kanjidic.db
 
 example.txt
 

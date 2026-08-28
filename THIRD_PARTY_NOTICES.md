@@ -15,3 +15,18 @@ with the Group's [licence](https://www.edrdg.org/edrdg/licence.html) (CC BY-SA 4
 `tools/build_dictionary.py` converts a jmdict-simplified JSON release into the bundled SQLite
 file at `app/src/main/assets/dictionary/jmdict.db` - run it again with a newer release to update
 the bundled data.
+
+## KANJIDIC2
+
+The bundled per-kanji data (`app/src/main/assets/dictionary/kanjidic.db`) is built from
+[KANJIDIC2](https://www.edrdg.org/wiki/index.php/KANJIDIC_Project), via the English-only release
+of [jmdict-simplified](https://github.com/scriptin/jmdict-simplified) (JSON-converted KANJIDIC2,
+same project as the JMdict release above).
+
+This application uses the KANJIDIC2 dictionary file. This file is the property of the Electronic
+Dictionary Research and Development Group (<https://www.edrdg.org/>), and is used in conformance
+with the Group's [licence](https://www.edrdg.org/edrdg/licence.html) (CC BY-SA 4.0).
+
+`tools/build_kanji_dictionary.py` converts a kanjidic2-en JSON release into the bundled SQLite
+file at `app/src/main/assets/dictionary/kanjidic.db` - run it again with a newer release to update
+the bundled data.

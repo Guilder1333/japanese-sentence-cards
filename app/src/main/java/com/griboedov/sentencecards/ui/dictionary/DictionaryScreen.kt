@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentPaste
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -28,11 +29,15 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -51,6 +56,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.griboedov.sentencecards.SentenceCardsApp
 import com.griboedov.sentencecards.data.dictionary.DictionaryEntry
+import com.griboedov.sentencecards.data.dictionary.KanjiEntry
 import com.griboedov.sentencecards.data.repository.WordStatusChoice
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -182,24 +188,93 @@ private fun DictionaryResultRow(entry: DictionaryEntry, onAdd: (WordStatusChoice
 /** Full, untruncated view of one entry - opened by tapping its row in the results list. */
 @Composable
 private fun DictionaryDetailScreen(entry: DictionaryEntry, onBack: () -> Unit, onAdd: (WordStatusChoice) -> Unit) {
+    val app = LocalContext.current.applicationContext as SentenceCardsApp
+    var tab by remember(entry) { mutableIntStateOf(0) }
+    // Loaded once per entry rather than per tab selection, so switching back and forth doesn't
+    // re-query the kanji db every time.
+    val kanjiEntries by produceState(initialValue = emptyList<KanjiEntry>(), entry) {
+        value = app.kanjiRepository.lookupInText(entry.kanji)
+    }
+
     Dialog(onDismissRequest = onBack, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Surface(modifier = Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.surface) {
-            Column(modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(20.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(modifier = Modifier.fillMaxSize()) {
+                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 8.dp, top = 20.dp, end = 20.dp)) {
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                     Spacer(Modifier.width(8.dp))
                     EntryHeader(entry)
                 }
-                Text(
-                    text = entry.meaning,
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier.padding(top = 20.dp),
-                )
-                AddButtonsRow(onAdd = onAdd, modifier = Modifier.fillMaxWidth().padding(top = 24.dp))
+
+                // Kanji tab only makes sense when the word actually has kanji in it - a kana-only
+                // word (e.g. これ) has nothing to show there.
+                if (kanjiEntries.isEmpty()) {
+                    DictionaryDetailBody(entry, onAdd, Modifier.weight(1f).padding(20.dp))
+                } else {
+                    TabRow(selectedTabIndex = tab, modifier = Modifier.padding(top = 12.dp)) {
+                        Tab(selected = tab == 0, onClick = { tab = 0 }, text = { Text("Meaning") })
+                        Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("Kanji") })
+                    }
+                    when (tab) {
+                        0 -> DictionaryDetailBody(entry, onAdd, Modifier.weight(1f).padding(20.dp))
+                        else -> KanjiTabBody(kanjiEntries, Modifier.weight(1f).padding(20.dp))
+                    }
+                }
             }
         }
+    }
+}
+
+@Composable
+private fun DictionaryDetailBody(entry: DictionaryEntry, onAdd: (WordStatusChoice) -> Unit, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.verticalScroll(rememberScrollState())) {
+        Text(text = entry.meaning, style = MaterialTheme.typography.bodyLarge)
+        AddButtonsRow(onAdd = onAdd, modifier = Modifier.fillMaxWidth().padding(top = 24.dp))
+    }
+}
+
+/** One row per kanji in the word, each with its on'yomi/kun'yomi readings and English meanings. */
+@Composable
+private fun KanjiTabBody(kanjiEntries: List<KanjiEntry>, modifier: Modifier = Modifier) {
+    Column(modifier = modifier.verticalScroll(rememberScrollState())) {
+        kanjiEntries.forEachIndexed { index, kanji ->
+            if (index > 0) HorizontalDivider(modifier = Modifier.padding(vertical = 16.dp))
+            KanjiRow(kanji)
+        }
+    }
+}
+
+@Composable
+private fun KanjiRow(kanji: KanjiEntry) {
+    Row {
+        Text(kanji.literal, style = MaterialTheme.typography.displaySmall, modifier = Modifier.padding(end = 16.dp))
+        Column {
+            if (kanji.onyomi.isNotEmpty()) {
+                ReadingLine(label = "On", readings = kanji.onyomi)
+            }
+            if (kanji.kunyomi.isNotEmpty()) {
+                ReadingLine(label = "Kun", readings = kanji.kunyomi)
+            }
+            Text(
+                text = kanji.meanings.joinToString(", "),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ReadingLine(label: String, readings: List<String>) {
+    Row {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.width(32.dp),
+        )
+        Text(readings.joinToString("、"), style = MaterialTheme.typography.bodyMedium)
     }
 }
 
