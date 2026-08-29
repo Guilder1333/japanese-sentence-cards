@@ -53,7 +53,8 @@ class JapaneseTokenizer(private val dictionaryRepository: DictionaryRepository) 
         val out = ArrayList<SentenceToken>(tokens.size)
         for (tok in tokens) {
             val surface = tok.surface
-            when (classifyToken(tok)) {
+            val kind = classifyToken(tok)
+            when (kind) {
                 TokenKind.WORD -> {
                     val dictForm = tok.baseForm?.takeIf { it != "*" } ?: surface
                     val furigana = tok.reading?.takeIf { it != "*" }?.let(::kataToHira)
@@ -66,13 +67,16 @@ class JapaneseTokenizer(private val dictionaryRepository: DictionaryRepository) 
                         dictionaryEntryId = resolveDictionaryEntryId(dictForm, furigana, entryIdCache),
                     )
                 }
-                // Katakana/hiragana/particle tokens are never tracked as WordEntity rows (see
+                // Kana words are never tracked as WordEntity rows on import (see
                 // StructuredImport.kt - only WORD-kind tokens get an id), so there's no dictionary
-                // entry to seed and no lookup needed here at all. They're kept as three separate
-                // kinds rather than collapsed into one so the sentence structure still records
-                // which kana tokens are actual words - see [TokenKind.HIRAGANA].
-                TokenKind.KATAKANA -> out += SentenceToken(word = surface, kind = TokenKind.KATAKANA.code)
-                TokenKind.HIRAGANA -> out += SentenceToken(word = surface, kind = TokenKind.HIRAGANA.code)
+                // entry id to seed and no lookup needed here. They do carry dictForm, though: the
+                // review screen looks a kana word up in the dictionary (and promotes it into the
+                // words table) by its base form, and わから is not an entry while わかる is.
+                TokenKind.KATAKANA, TokenKind.HIRAGANA -> out += SentenceToken(
+                    word = surface,
+                    kind = kind.code,
+                    dictForm = tok.baseForm?.takeIf { it != "*" && it != surface },
+                )
                 TokenKind.PARTICLE -> out += SentenceToken(word = surface, kind = TokenKind.PARTICLE.code)
             }
         }

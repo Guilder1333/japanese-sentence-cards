@@ -1,7 +1,9 @@
 package com.griboedov.sentencecards.data.importer
 
+import com.griboedov.sentencecards.data.db.SentenceToken
 import com.griboedov.sentencecards.data.db.TokenKind
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -111,6 +113,27 @@ class BookTextTest {
     fun `latin and digits stay PARTICLE even with a content part-of-speech`() {
         assertEquals(TokenKind.PARTICLE, classifyToken("eat", "名詞", "一般"))
         assertEquals(TokenKind.PARTICLE, classifyToken("123", "名詞", "数"))
+    }
+
+    @Test
+    fun `both kana kinds count as words, and as kana words`() {
+        // What makes the review screen give them the dictionary and the 4-direction menu, and
+        // what makes it withhold "force furigana" from them.
+        assertTrue(TokenKind.HIRAGANA.isWord && TokenKind.HIRAGANA.isKanaWord)
+        assertTrue(TokenKind.KATAKANA.isWord && TokenKind.KATAKANA.isKanaWord)
+        assertTrue(TokenKind.WORD.isWord)
+        assertFalse(TokenKind.WORD.isKanaWord)
+        assertFalse(TokenKind.PARTICLE.isWord)
+        assertFalse(TokenKind.PARTICLE.isKanaWord)
+    }
+
+    @Test
+    fun `baseText is the dictionary form when there is one, the surface otherwise`() {
+        val inflected = SentenceToken(word = "わから", kind = TokenKind.HIRAGANA.code, dictForm = "わかる")
+        val plain = SentenceToken(word = "コーヒー", kind = TokenKind.KATAKANA.code)
+
+        assertEquals("わかる", inflected.baseText)
+        assertEquals("コーヒー", plain.baseText)
     }
 
     @Test

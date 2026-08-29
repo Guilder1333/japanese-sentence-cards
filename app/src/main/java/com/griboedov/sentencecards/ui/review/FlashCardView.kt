@@ -37,6 +37,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.griboedov.sentencecards.data.db.CardEntity
 import com.griboedov.sentencecards.data.db.SentenceToken
+import com.griboedov.sentencecards.data.db.TokenKind
 import com.griboedov.sentencecards.data.db.WordEntity
 import com.griboedov.sentencecards.ui.theme.furiganaStyleFor
 import com.griboedov.sentencecards.ui.theme.japaneseSentenceStyleFor
@@ -48,15 +49,25 @@ import com.griboedov.sentencecards.ui.theme.wordStatusColor
  * ones with hidden furigana. The back does not flip back on tap - words there open a flick-style
  * 4-direction menu (press and hold, then drag - see [FlickMenu]) instead. A plain tap on a word
  * does the same thing as flicking it up: both open the dictionary lookup.
+ *
+ * "Word" here means any [TokenKind.isWord] token, not just a tracked one: kana words get the menu
+ * and the dictionary too, even though they have no words-table row until the user marks one
+ * known/to-learn from that very menu (see [ReviewViewModel.onWordDirection]). Only grammar tokens
+ * are inert.
+ *
+ * [tokenWords] maps a token's index in [CardEntity.structure] to the tracked word it resolves to,
+ * if any - by index rather than by word id because a kana word has no id in the structure (see
+ * [ReviewUiState.tokenWords]). It is only used for colouring and the front's furigana rule; which
+ * tokens are interactive comes from the token kind alone.
  */
 @Composable
 fun FlashCardView(
     card: CardEntity,
-    words: Map<Long, WordEntity>,
+    tokenWords: Map<Int, WordEntity>,
     flipped: Boolean,
     onFlip: () -> Unit,
-    onWordTap: (Long) -> Unit,
-    onWordDirection: (Long, WordDirection) -> Unit,
+    onWordTap: (SentenceToken) -> Unit,
+    onWordDirection: (SentenceToken, WordDirection) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val rotation by animateFloatAsState(targetValue = if (flipped) 180f else 0f, animationSpec = tween(400), label = "cardFlip")
@@ -72,10 +83,12 @@ fun FlashCardView(
     // Flick gesture state, lifted here (rather than per-word) so the highlight popup is drawn as
     // a plain layer within this same composition/window - not a separate Popup window, which
     // would risk swallowing the drag events that are still arriving at the word's pointerInput.
-    var flickWord by remember(card.id) { mutableStateOf<WordEntity?>(null) }
-    // The tapped token's own (possibly inflected) reading - see CardBack below - rather than a
-    // dictionary-form reading looked up by id, since FlickMenu should show exactly what's on the
-    // card, not a citation-form reading that may not even match how this occurrence reads.
+    var flickToken by remember(card.id) { mutableStateOf<SentenceToken?>(null) }
+    // The word text and the tapped token's own (possibly inflected) reading - see CardBack below -
+    // rather than a dictionary-form reading looked up by id, since FlickMenu should show exactly
+    // what's on the card, not a citation-form reading that may not even match how this occurrence
+    // reads.
+    var flickText by remember(card.id) { mutableStateOf("") }
     var flickFurigana by remember(card.id) { mutableStateOf<String?>(null) }
     var flickDirection by remember(card.id) { mutableStateOf<WordDirection?>(null) }
 
@@ -104,7 +117,7 @@ fun FlashCardView(
                     modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                     contentAlignment = Alignment.Center,
                 ) {
-                    CardFront(card, words)
+                    CardFront(card, tokenWords)
                 }
             } else {
                 Box(
@@ -113,22 +126,34 @@ fun FlashCardView(
                 ) {
                     CardBack(
                         card = card,
-                        words = words,
-                        onWordTap = { word -> onWordTap(word.id) },
-                        onFlickStart = { word, furigana -> flickWord = word; flickFurigana = furigana; flickDirection = null },
+                        tokenWords = tokenWords,
+                        onWordTap = onWordTap,
+                        onFlickStart = { token, text, furigana ->
+                            flickToken = token
+                            flickText = text
+                            flickFurigana = furigana
+                            flickDirection = null
+                        },
                         onFlickDirectionChange = { flickDirection = it },
                         onFlickEnd = { commit ->
-                            val word = flickWord
+                            val token = flickToken
                             val direction = flickDirection
-                            if (commit && word != null && direction != null) {
-                                onWordDirection(word.id, direction)
+                            if (commit && token != null && direction != null) {
+                                onWordDirection(token, direction)
                             }
-                            flickWord = null
+                            flickToken = null
                             flickFurigana = null
                             flickDirection = null
                         },
                     )
-                    flickWord?.let { word -> FlickMenu(word = word, furigana = flickFurigana, highlighted = flickDirection) }
+                    flickToken?.let { token ->
+                        FlickMenu(
+                            word = flickText,
+                            furigana = flickFurigana,
+                            canForceFurigana = token.tokenKind == TokenKind.WORD,
+                            highlighted = flickDirection,
+                        )
+                    }
                 }
             }
         }
@@ -136,16 +161,16 @@ fun FlashCardView(
 }
 
 @Composable
-private fun CardFront(card: CardEntity, words: Map<Long, WordEntity>) {
+private fun CardFront(card: CardEntity, tokenWords: Map<Int, WordEntity>) {
     val sentenceStyle = japaneseSentenceStyleFor(card.text.length)
     FlowRow(
         modifier = Modifier.fillMaxWidth().wrapContentHeight(),
         horizontalArrangement = Arrangement.Center,
         verticalArrangement = Arrangement.Center,
     ) {
-        for (token in card.structure) {
-            val word = token.id?.let { words[it] }
-            val isMainWord = token.id != null && token.id in card.mainWordIds
+        card.structure.forEachIndexed { index, token ->
+            val word = tokenWords[index]
+            val isMainWord = word != null && word.id in card.mainWordIds
             // Front furigana rule: hidden by default, shown only for words still needing the
             // crutch (forceFurigana - either still unconfirmed, or explicitly forced back on) -
             // and never for this sentence's main/quizzed words, since those are exactly what the
@@ -167,41 +192,55 @@ private val FlickThreshold = 24.dp
 @Composable
 private fun CardBack(
     card: CardEntity,
-    words: Map<Long, WordEntity>,
-    onWordTap: (WordEntity) -> Unit,
-    onFlickStart: (WordEntity, furigana: String?) -> Unit,
+    tokenWords: Map<Int, WordEntity>,
+    onWordTap: (SentenceToken) -> Unit,
+    onFlickStart: (SentenceToken, text: String, furigana: String?) -> Unit,
     onFlickDirectionChange: (WordDirection?) -> Unit,
     onFlickEnd: (committed: Boolean) -> Unit,
 ) {
     val sentenceStyle = japaneseSentenceStyleFor(card.text.length)
     Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
         FlowRow(horizontalArrangement = Arrangement.Center, verticalArrangement = Arrangement.Center) {
-            for (token in card.structure) {
-                val word = token.id?.let { words[it] }
-                val isMainWord = token.id != null && token.id in card.mainWordIds
-                val tokenModifier = if (word != null) {
+            card.structure.forEachIndexed { index, token ->
+                val word = tokenWords[index]
+                val isMainWord = word != null && word.id in card.mainWordIds
+                // Every word is interactive, tracked or not - a kana word gets the menu precisely
+                // so it can be tracked from here. Only grammar tokens stay inert.
+                val tokenModifier = if (token.tokenKind.isWord) {
+                    // Furigana over a word already written in kana would be the word again, so
+                    // that direction isn't offered for one; filtering it out here (rather than
+                    // only ignoring the commit) also stops the menu highlighting a slot that
+                    // won't do anything.
+                    val canForceFurigana = token.tokenKind == TokenKind.WORD
+                    val flickText = word?.word ?: token.baseText
                     Modifier
                         // Plain tap: dictionary lookup (same as flicking up). A separate
                         // pointerInput block, since detectDragGesturesAfterLongPress below
                         // leaves short taps untouched.
-                        .pointerInput(word.id) {
-                            detectTapGestures(onTap = { onWordTap(word) })
+                        // Keyed on the token itself (and, below, on everything else the gesture
+                        // block captures) rather than on the position: the same index holds a
+                        // different token from one card to the next, and flickText changes under
+                        // it the moment a kana word here gets promoted.
+                        .pointerInput(token) {
+                            detectTapGestures(onTap = { onWordTap(token) })
                         }
                         // Press and hold, then drag like a flick keyboard: direction is
                         // recomputed from the total drag offset on every move, and committed
                         // only once the finger lifts.
-                        .pointerInput(word.id) {
+                        .pointerInput(token, flickText, canForceFurigana) {
                             val thresholdPx = FlickThreshold.toPx()
                             var total = Offset.Zero
                             detectDragGesturesAfterLongPress(
                                 onDragStart = {
                                     total = Offset.Zero
-                                    onFlickStart(word, token.furigana)
+                                    onFlickStart(token, flickText, token.furigana)
                                 },
                                 onDrag = { change, amount ->
                                     change.consume()
                                     total += amount
-                                    onFlickDirectionChange(directionFromOffset(total, thresholdPx))
+                                    val direction = directionFromOffset(total, thresholdPx)
+                                        ?.takeUnless { it == WordDirection.DOWN && !canForceFurigana }
+                                    onFlickDirectionChange(direction)
                                 },
                                 onDragEnd = { onFlickEnd(true) },
                                 onDragCancel = { onFlickEnd(false) },

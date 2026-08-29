@@ -367,10 +367,15 @@ def build_structure(tagger, sentence: str, dictionary: Dictionary, word_ids: Wor
             entry_id = dictionary.entry_id(dict_form, kata_to_hira(reading) if reading else None)
             if entry_id is not None:
                 entry["dictionaryEntryId"] = entry_id
-        # Katakana/hiragana/particle tokens are never tracked as WordEntity rows (see the app's
-        # StructuredImport.kt - only kind: 1 tokens get an id), so there's nothing to look up or
-        # seed for them. They stay three separate kinds rather than collapsing into one so the
-        # structure still records which kana tokens are actual words (see TokenKind.kt).
+        elif kind in (KIND_KATAKANA, KIND_HIRAGANA):
+            # Kana words are never tracked as WordEntity rows on import (see the app's
+            # StructuredImport.kt - only kind: 1 tokens get an id), so there's no dictionary entry
+            # id to seed and no lookup to do here. They do carry dictForm, though: the review
+            # screen looks a kana word up in the dictionary (and promotes it into the words table)
+            # by its base form, and わから is not an entry while わかる is.
+            if dict_form != surface:
+                entry["dictForm"] = dict_form
+        # Particles get nothing beyond word/kind - there's no word there to look up.
 
         tokens.append(entry)
     return tokens

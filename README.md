@@ -31,7 +31,8 @@ the bundled dictionary's licensing.
      target (avoid stacking multiple unlearned words in one card).
 - Priority queue (highest/medium/easy/backlog), including "twice in a row demotes a level" and
   "don't jump the queue mid-pass".
-- Review UI: flip card, word 4-direction menu (know/learn/force furigana/dictionary) via a
+- Review UI: flip card, word 4-direction menu (know/learn/force furigana/dictionary - kana words
+  get every direction but force furigana, see "UI" below) via a
   flick-keyboard-style press-and-hold gesture, word-status coloring (green known / red to-learn /
   blue this card's main words).
 - Quiz after "Learned": reading-only multiple-choice for every main word, one round per Learned
@@ -231,6 +232,24 @@ Pressing on word should open 4 directions menu:
 2. Left - mark word for learning
 3. Down - force furigana
 4. Up - open dictionary (TODO)
+
+A plain tap on a word does the same thing as flicking it up.
+
+"Word" here means any token that isn't grammar - `kind` 1, 3 **and** 4 (see the `kind` table above),
+not only tracked kanji words. A kana word gets the dictionary lookup and the same 4-direction menu,
+with two differences that follow from it not being in the words table:
+
+- **Down (force furigana) is unavailable.** Furigana over a word already written in kana would just
+  be the word again. The slot is drawn greyed out and a downward flick doesn't resolve to a
+  direction at all, so the action can't be committed by accident. This holds even after the word has
+  been promoted (below) - it's a property of the script, not of whether the word is tracked.
+- **Right/left promote the word.** Kana words are assumed known and are never imported into the
+  words table, so the first time the user says otherwise about one - marks it known, or to-learn -
+  is when its row gets created, keyed on the word's dictionary form (わから on the card, わかる in
+  the table). From then on it behaves like any other tracked word and shows its status colour on
+  the card. Note that card generation for a freshly promoted word only finds sentences that
+  reference it by id, and kana words carry no id in a sentence's structure - so promoting one marks
+  it to-learn but does not yet pull sentences out of the pool for it.
 
 ## Sentences source
 

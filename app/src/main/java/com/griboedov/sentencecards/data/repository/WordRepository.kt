@@ -82,14 +82,21 @@ class WordRepository(private val dao: WordDao, private val cardGenerator: CardGe
      * updates it, if a word with the same text is already tracked - e.g. re-adding it with a
      * different status). This is how a dictionary entry becomes a real, trackable [WordEntity]:
      * dictionary browsing has no metrics of its own, only the internal table does.
+     *
+     * Also the promotion path for a kana word met during review ([com.griboedov.sentencecards.ui.review.ReviewViewModel.onWordDirection]),
+     * which is why [dictionaryEntryId] is nullable: those aren't resolved at import time (see
+     * [com.griboedov.sentencecards.data.db.SentenceToken]), and a kana word with no JMdict match
+     * should still be trackable rather than silently refused. A null never clears an entry id an
+     * already-tracked word had resolved.
      */
-    suspend fun addFromDictionary(word: String, dictionaryEntryId: Long, status: WordStatusChoice): Long {
+    suspend fun addFromDictionary(word: String, dictionaryEntryId: Long?, status: WordStatusChoice): Long {
         val existing = dao.findByWord(word)
         val base = existing ?: WordEntity(id = (dao.maxId() ?: 0L) + 1, word = word, dictionaryEntryId = dictionaryEntryId)
+        val entryId = dictionaryEntryId ?: base.dictionaryEntryId
         val updated = when (status) {
-            WordStatusChoice.KNOWN -> base.copy(dictionaryEntryId = dictionaryEntryId, toLearn = false, forceFurigana = false)
-            WordStatusChoice.TO_LEARN -> base.copy(dictionaryEntryId = dictionaryEntryId, toLearn = true)
-            WordStatusChoice.FORCE_FURIGANA -> base.copy(dictionaryEntryId = dictionaryEntryId, toLearn = false, forceFurigana = true)
+            WordStatusChoice.KNOWN -> base.copy(dictionaryEntryId = entryId, toLearn = false, forceFurigana = false)
+            WordStatusChoice.TO_LEARN -> base.copy(dictionaryEntryId = entryId, toLearn = true)
+            WordStatusChoice.FORCE_FURIGANA -> base.copy(dictionaryEntryId = entryId, toLearn = false, forceFurigana = true)
         }
         if (existing != null) dao.update(updated) else dao.upsert(updated)
         if (status == WordStatusChoice.TO_LEARN) cardGenerator.generateCardsForWord(updated.id)

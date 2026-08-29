@@ -22,7 +22,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import com.griboedov.sentencecards.data.db.WordEntity
 import com.griboedov.sentencecards.ui.theme.EasyPriority
 import com.griboedov.sentencecards.ui.theme.HighestPriority
 import kotlin.math.atan2
@@ -38,13 +37,19 @@ import kotlin.math.atan2
  * wisdom/knowledge) in green for "mark known", 不 ("fu" - un-/non-, i.e. not yet known) in red for
  * "mark to learn", ふ (hiragana "fu", as in furigana) for "force furigana", and a book for the
  * dictionary lookup.
+ *
+ * [word] is the text to show in the middle - a tracked word's dictionary form, or the token's own
+ * base form for a word that isn't tracked yet. [canForceFurigana] is false for a kana word: there
+ * is no reading to annotate 「わかる」 with, so the down slot is drawn greyed out and
+ * [FlashCardView] never resolves a downward drag to a direction for one, making the action
+ * unreachable rather than silently doing nothing.
  */
 @Composable
-fun FlickMenu(word: WordEntity, furigana: String?, highlighted: WordDirection?) {
+fun FlickMenu(word: String, furigana: String?, canForceFurigana: Boolean, highlighted: WordDirection?) {
     Surface(shape = CircleShape, tonalElevation = 8.dp, shadowElevation = 8.dp) {
         Box(modifier = Modifier.size(216.dp), contentAlignment = Alignment.Center) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(word.word, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
+                Text(word, style = MaterialTheme.typography.headlineSmall, textAlign = TextAlign.Center)
                 furigana?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
             DirectionSlot(
@@ -57,7 +62,8 @@ fun FlickMenu(word: WordEntity, furigana: String?, highlighted: WordDirection?) 
                 alignment = Alignment.BottomCenter,
                 active = highlighted == WordDirection.DOWN,
                 activeColor = MaterialTheme.colorScheme.secondary,
-                contentDescription = "Force furigana",
+                contentDescription = if (canForceFurigana) "Force furigana" else "Force furigana unavailable",
+                enabled = canForceFurigana,
             ) { tint -> DirectionGlyph("ふ", tint) }
             DirectionSlot(
                 alignment = Alignment.CenterStart,
@@ -74,6 +80,9 @@ fun FlickMenu(word: WordEntity, furigana: String?, highlighted: WordDirection?) 
         }
     }
 }
+
+/** Ordinary Material disabled-content opacity, for a direction this word does not support. */
+private const val DisabledAlpha = 0.38f
 
 /** Nearest of the four directions for a cumulative drag [offset], or null while inside the dead zone. */
 fun directionFromOffset(offset: Offset, thresholdPx: Float): WordDirection? {
@@ -98,10 +107,15 @@ private fun BoxScope.DirectionSlot(
     active: Boolean,
     activeColor: Color,
     contentDescription: String,
+    enabled: Boolean = true,
     content: @Composable (tint: Color) -> Unit,
 ) {
-    val background = if (active) activeColor else MaterialTheme.colorScheme.surfaceVariant
-    val foreground = if (active) Color.White else activeColor
+    val background = if (active && enabled) activeColor else MaterialTheme.colorScheme.surfaceVariant
+    val foreground = when {
+        !enabled -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = DisabledAlpha)
+        active -> Color.White
+        else -> activeColor
+    }
     Surface(
         shape = CircleShape,
         color = background,

@@ -26,6 +26,24 @@ enum class TokenKind(val code: Int) {
     KATAKANA(3),
     HIRAGANA(4);
 
+    /**
+     * Whether this token is a *word* rather than grammar - true for [WORD] and for the two kana
+     * kinds, false for [PARTICLE]. The kana kinds aren't tracked in the words table on import, but
+     * they are still real vocabulary: the review screen gives them the same dictionary lookup and
+     * 4-direction menu a [WORD] gets, and marking one known/to-learn there promotes it into the
+     * words table (see [com.griboedov.sentencecards.ui.review.ReviewViewModel.onWordDirection]).
+     */
+    val isWord: Boolean get() = this != PARTICLE
+
+    /**
+     * Whether this token is a word written entirely in kana ([KATAKANA] or [HIRAGANA]). These
+     * behave like words everywhere except furigana: there is no reading to annotate a kana word
+     * with, so "force furigana" is meaningless for them and is disabled in the 4-direction menu
+     * (see [com.griboedov.sentencecards.ui.review.FlickMenu]) - even once the word has been
+     * promoted into the words table, since that's a property of the script, not of tracking.
+     */
+    val isKanaWord: Boolean get() = this == KATAKANA || this == HIRAGANA
+
     companion object {
         fun fromCode(code: Int): TokenKind = entries.firstOrNull { it.code == code } ?: PARTICLE
     }

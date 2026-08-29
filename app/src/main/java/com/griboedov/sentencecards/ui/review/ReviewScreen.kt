@@ -84,7 +84,7 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
                     } else {
                         FlashCardView(
                             card = card,
-                            words = state.words,
+                            tokenWords = state.tokenWords,
                             flipped = state.isFlipped,
                             onFlip = viewModel::onFlip,
                             onWordTap = viewModel::onWordTapped,

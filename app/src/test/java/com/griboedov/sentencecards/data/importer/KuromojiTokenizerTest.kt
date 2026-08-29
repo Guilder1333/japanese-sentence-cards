@@ -98,6 +98,30 @@ class KuromojiTokenizerTest {
     }
 
     @Test
+    fun `a kana word's base form is available for the review screen to look it up by`() {
+        val tokenizer = Tokenizer.Builder().build()
+
+        // JapaneseTokenizer stores exactly this pair on a kana token: the surface as `word`, the
+        // base form as `dictForm`. The review screen searches the dictionary (and promotes the
+        // word into the words table) by the latter - わから is not an entry, わかる is.
+        val tok = tokenizer.tokenize("わからなかった").first()
+
+        assertEquals(TokenKind.HIRAGANA, classifyToken(tok))
+        assertEquals("わから", tok.surface)
+        assertEquals("わかる", tok.baseForm)
+    }
+
+    @Test
+    fun `a katakana loanword's base form is just its surface, so no dictForm is stored`() {
+        val tokenizer = Tokenizer.Builder().build()
+
+        val tok = tokenizer.tokenize("コーヒー").single()
+
+        assertEquals(TokenKind.KATAKANA, classifyToken(tok))
+        assertEquals(tok.surface, tok.baseForm)
+    }
+
+    @Test
     fun `extractSearchTerms keeps a kana-written content word by its dictionary form`() {
         val tokenizer = Tokenizer.Builder().build()
 
