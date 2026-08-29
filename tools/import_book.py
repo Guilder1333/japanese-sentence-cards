@@ -44,6 +44,18 @@ DEFAULT_DICT_DB = os.path.join(SCRIPT_DIR, "..", "app", "src", "main", "assets",
 KIND_WORD = 1
 KIND_PARTICLE = 2
 KIND_KATAKANA = 3
+KIND_HIRAGANA = 4
+
+# UniDic part-of-speech level 1 values that are pure grammar rather than words:
+# 助詞 = particle, 助動詞 = auxiliary verb/copula (です, た, ない), 補助記号/記号 = punctuation and
+# symbols, 空白 = whitespace. Anything tagged with one of these is a particle whatever its script.
+GRAMMAR_POS1 = {"助詞", "助動詞", "補助記号", "記号", "空白"}
+# Level-1/level-2 values marking a token that only exists to attach to another word: 接尾辞 =
+# suffix (さん, たち, 的), 非自立可能 = "can be dependent", UniDic's tag for the helper verbs of
+# ～ている / ～てみる / ～てください and the こと of ～ということ. These carry no meaning on their
+# own, so they belong with the grammar even though 非自立可能's level-1 tag says 動詞/名詞/形容詞.
+GRAMMAR_POS1_SUFFIX = "接尾辞"
+DEPENDENT_POS2 = "非自立可能"
 
 SENTENCE_END_CHARS = set("。.！!？?")
 # Half-width corner brackets (｢｣) show up in some digitized/OCR'd books mixed in with the normal
@@ -88,15 +100,36 @@ def _char_category(ch: str) -> str:
     return "other"
 
 
-def classify_token(surface: str) -> int:
-    """Maps a token's surface form to a TokenKind code (see TokenKind.kt for the definitions)."""
+def classify_token(surface: str, pos1: Optional[str] = None, pos2: Optional[str] = None) -> int:
+    """
+    Maps a token to a TokenKind code (see TokenKind.kt for the definitions).
+
+    `pos1`/`pos2` are the tokenizer's part-of-speech levels 1 and 2 (fugashi/UniDic:
+    `tok.feature.pos1`/`.pos2`; "*" and None both mean "not known"). They're what separates a
+    kana-written *word* from a particle - script alone cannot, since わかる and が are both
+    hiragana-only. With no part-of-speech to go on, every kana token falls back to KIND_PARTICLE,
+    which is the old, script-only behaviour.
+
+    Kanji and katakana are still decided by script alone, before part-of-speech is even consulted:
+    a kanji-containing token stays a tracked KIND_WORD even when it's a dependent suffix (的, 性),
+    and a katakana loanword stays KIND_KATAKANA even when it's a filler.
+
+    Mirrors classifyToken in the app's data/importer/BookText.kt, which runs the same rule over
+    Kuromoji IPADIC's tag set - the tag *names* differ between the two dictionaries (IPADIC says
+    記号/非自立 where UniDic says 補助記号/非自立可能), the rule doesn't.
+    """
     categories = {_char_category(c) for c in surface}
     categories.discard("either")
     if "kanji" in categories:
         return KIND_WORD
     if categories == {"kata"}:
         return KIND_KATAKANA
-    # Hiragana-only, digits, latin, punctuation - all "assumed already known"/not tracked.
+    if pos1 in GRAMMAR_POS1 or pos1 == GRAMMAR_POS1_SUFFIX or pos2 == DEPENDENT_POS2:
+        return KIND_PARTICLE
+    # A content word (verb/adjective/adverb/noun/pronoun) that happens to be written in kana.
+    if "hira" in categories and pos1 and pos1 != "*":
+        return KIND_HIRAGANA
+    # Digits, latin, punctuation, and - with no part-of-speech to go on - any kana token.
     return KIND_PARTICLE
 
 
@@ -313,7 +346,7 @@ def build_structure(tagger, sentence: str, dictionary: Dictionary, word_ids: Wor
     tokens = []
     for tok in tagger(sentence):
         surface = tok.surface
-        kind = classify_token(surface)
+        kind = classify_token(surface, getattr(tok.feature, "pos1", None), getattr(tok.feature, "pos2", None))
         dict_form = getattr(tok.feature, "orthBase", None) or surface
         reading = getattr(tok.feature, "kana", None)
 
@@ -334,9 +367,10 @@ def build_structure(tagger, sentence: str, dictionary: Dictionary, word_ids: Wor
             entry_id = dictionary.entry_id(dict_form, kata_to_hira(reading) if reading else None)
             if entry_id is not None:
                 entry["dictionaryEntryId"] = entry_id
-        # Katakana/particle tokens are never tracked as WordEntity rows (see the app's
+        # Katakana/hiragana/particle tokens are never tracked as WordEntity rows (see the app's
         # StructuredImport.kt - only kind: 1 tokens get an id), so there's nothing to look up or
-        # seed for them.
+        # seed for them. They stay three separate kinds rather than collapsing into one so the
+        # structure still records which kana tokens are actual words (see TokenKind.kt).
 
         tokens.append(entry)
     return tokens

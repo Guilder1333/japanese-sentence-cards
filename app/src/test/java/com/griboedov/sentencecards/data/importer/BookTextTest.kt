@@ -76,9 +76,41 @@ class BookTextTest {
     }
 
     @Test
-    fun `classifies hiragana-only and punctuation as PARTICLE`() {
+    fun `classifies hiragana-only and punctuation as PARTICLE when no part-of-speech is given`() {
         assertEquals(TokenKind.PARTICLE, classifyToken("は"))
         assertEquals(TokenKind.PARTICLE, classifyToken("。"))
+    }
+
+    @Test
+    fun `part-of-speech tells a kana-written word apart from a particle`() {
+        // Same script, opposite kinds - this is the whole reason classifyToken takes a POS.
+        assertEquals(TokenKind.PARTICLE, classifyToken("が", "助詞", "格助詞"))
+        assertEquals(TokenKind.HIRAGANA, classifyToken("わかる", "動詞", "自立"))
+        assertEquals(TokenKind.HIRAGANA, classifyToken("きれい", "名詞", "形容動詞語幹"))
+        assertEquals(TokenKind.HIRAGANA, classifyToken("とても", "副詞", "助詞類接続"))
+    }
+
+    @Test
+    fun `classifies auxiliaries, punctuation and dependent helpers as PARTICLE`() {
+        assertEquals(TokenKind.PARTICLE, classifyToken("です", "助動詞", "*"))
+        assertEquals(TokenKind.PARTICLE, classifyToken("。", "記号", "句点"))
+        // The いる of ～ている and the さん of 田中さん only exist to attach to another word.
+        assertEquals(TokenKind.PARTICLE, classifyToken("いる", "動詞", "非自立"))
+        assertEquals(TokenKind.PARTICLE, classifyToken("さん", "名詞", "接尾"))
+    }
+
+    @Test
+    fun `kanji and katakana are still decided by script, whatever the part-of-speech says`() {
+        assertEquals(TokenKind.WORD, classifyToken("言葉", "名詞", "一般"))
+        // A kanji suffix stays a tracked word even though 接尾 would otherwise mean grammar.
+        assertEquals(TokenKind.WORD, classifyToken("的", "名詞", "接尾"))
+        assertEquals(TokenKind.KATAKANA, classifyToken("イギリス", "名詞", "固有名詞"))
+    }
+
+    @Test
+    fun `latin and digits stay PARTICLE even with a content part-of-speech`() {
+        assertEquals(TokenKind.PARTICLE, classifyToken("eat", "名詞", "一般"))
+        assertEquals(TokenKind.PARTICLE, classifyToken("123", "名詞", "数"))
     }
 
     @Test

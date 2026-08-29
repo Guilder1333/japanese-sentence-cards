@@ -113,7 +113,7 @@ Schema example
 [
   {
     "word": "この",
-    "kind": 2
+    "kind": 4
   },
   {
     "word": "言葉",
@@ -129,6 +129,10 @@ Schema example
   {
     "word": "イギリス",
     "kind": 3
+  },
+  {
+    "word": "だった",
+    "kind": 2
   },
   {
     "word": "語",
@@ -150,6 +154,27 @@ Schema example
 
 There might be more fields to represent what kind of particle is this word, or some other info.
 
+`kind` is:
+
+| `kind` | Meaning | Tracked as a word? |
+| --- | --- | --- |
+| 1 | **Word** - contains kanji (言葉, 食べた) | yes |
+| 2 | **Particle/grammar** - particles (は, を), auxiliaries and the copula (です, た, ない), punctuation, and dependent helpers that only attach to another word (the いる of ～ている, the さん of 田中さん) | no |
+| 3 | **Katakana** loanword (イギリス, コンピューター) | no |
+| 4 | **Hiragana word** - a *content* word (verb, adjective, adverb, noun, pronoun) that happens to be written without kanji (わかる, きれい, とても, ぼく) | no |
+
+Kinds 1 and 3 fall out of the script alone, but 2 and 4 do not: わかる and が are both hiragana-only,
+so telling a kana-written word from a particle needs the tokenizer's **part of speech**, not just
+the characters. Both parsers do this - `classifyToken` in
+`data/importer/BookText.kt` (Kuromoji IPADIC, in-app) and `classify_token` in
+`tools/import_book.py` (fugashi/UniDic, offline) - by the same rule, though the two dictionaries
+spell their tags differently (IPADIC's 記号/非自立 vs. UniDic's 補助記号/非自立可能). A token with
+no part of speech available falls back to kind 2, which is the old script-only behaviour.
+
+Kind 4 is not tracked in the word database (see "Adding sentence" below) - it exists so that a kana
+word is still recorded *as a word*: the UI can style it apart from grammar, and the Dictionary
+screen searches it (「きれいな花」 looks up きれい as well as 花) instead of discarding it as filler.
+
 So, point is that the sentence is being parsed and stored as separate items.
 
 ID is assigned to the word present in database. For a `kind: 1` (word) token, the id is derived
@@ -168,7 +193,8 @@ never duplicated in the sentence structure itself.
 #### Adding sentence
 
 When new sentence is added to the app, we should assume that all new kanji words (not yet present in the database) are not learned, and any hiragana/katakana words are already known.
-I.e. hiragana/katakana words not even added to the database.
+I.e. hiragana/katakana words not even added to the database - kinds 2, 3 and 4 never get an `id` or
+a row in the words table, only kind 1 does.
 
 ### Quiz
 

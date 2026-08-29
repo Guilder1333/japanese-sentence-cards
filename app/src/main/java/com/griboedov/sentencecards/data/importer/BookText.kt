@@ -194,12 +194,38 @@ fun japaneseRatio(text: String): Double {
     return japanese.toDouble() / letters.length
 }
 
-/** Maps a token's surface form to a [TokenKind] - see [TokenKind]'s doc comment for the codes. */
-fun classifyToken(surface: String): TokenKind {
+// Kuromoji IPADIC part-of-speech level 1 values that are pure grammar rather than words:
+// 助詞 = particle, 助動詞 = auxiliary verb/copula (です, た, ない), 記号 = symbol/punctuation,
+// フィラー = filler (えーと). Anything tagged with one of these is PARTICLE whatever its script.
+private val GRAMMAR_POS1 = setOf("助詞", "助動詞", "記号", "フィラー")
+
+// Part-of-speech level 2 values marking a token that only exists to attach to another word:
+// 非自立 = dependent (the いる of ～ている, the こと of ～ということ), 接尾 = suffix (さん, たち,
+// 的). These carry no meaning on their own, so they belong with the grammar even though their
+// level-1 tag says 動詞/名詞/形容詞.
+private val DEPENDENT_POS2 = setOf("非自立", "接尾")
+
+/**
+ * Maps a token to a [TokenKind] - see [TokenKind]'s doc comment for the codes.
+ *
+ * [pos1]/[pos2] are the tokenizer's part-of-speech levels 1 and 2 (Kuromoji IPADIC:
+ * `Token.partOfSpeechLevel1`/`2`; `"*"` and null both mean "not known"). They are what separates a
+ * kana-written *word* from a particle - script alone cannot: わかる and が are both hiragana-only.
+ * Without them every kana token falls back to [TokenKind.PARTICLE], which is the old,
+ * script-only behaviour.
+ *
+ * Kanji and katakana are still decided by script alone, before part-of-speech is even consulted:
+ * a kanji-containing token is a tracked [TokenKind.WORD] even when it is a dependent suffix
+ * (的, 性), and a katakana loanword is [TokenKind.KATAKANA] even when it is a filler (ソレ).
+ */
+fun classifyToken(surface: String, pos1: String? = null, pos2: String? = null): TokenKind {
     val categories = surface.map { charCategory(it) }.filterNot { it == CharCategory.EITHER }.toSet()
     if (CharCategory.KANJI in categories) return TokenKind.WORD
     if (categories == setOf(CharCategory.KATA)) return TokenKind.KATAKANA
-    // Hiragana-only, digits, latin, punctuation - all "assumed already known"/not tracked.
+    if (pos1 in GRAMMAR_POS1 || pos2 in DEPENDENT_POS2) return TokenKind.PARTICLE
+    // A content word (verb/adjective/adverb/noun/pronoun) that happens to be written in kana.
+    if (CharCategory.HIRA in categories && pos1 != null && pos1 != "*") return TokenKind.HIRAGANA
+    // Digits, latin, punctuation, and - with no part-of-speech to go on - any kana token.
     return TokenKind.PARTICLE
 }
 

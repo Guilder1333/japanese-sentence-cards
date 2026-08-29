@@ -53,7 +53,7 @@ class JapaneseTokenizer(private val dictionaryRepository: DictionaryRepository) 
         val out = ArrayList<SentenceToken>(tokens.size)
         for (tok in tokens) {
             val surface = tok.surface
-            when (classifyToken(surface)) {
+            when (classifyToken(tok)) {
                 TokenKind.WORD -> {
                     val dictForm = tok.baseForm?.takeIf { it != "*" } ?: surface
                     val furigana = tok.reading?.takeIf { it != "*" }?.let(::kataToHira)
@@ -66,10 +66,13 @@ class JapaneseTokenizer(private val dictionaryRepository: DictionaryRepository) 
                         dictionaryEntryId = resolveDictionaryEntryId(dictForm, furigana, entryIdCache),
                     )
                 }
-                // Katakana/particle tokens are never tracked as WordEntity rows (see
+                // Katakana/hiragana/particle tokens are never tracked as WordEntity rows (see
                 // StructuredImport.kt - only WORD-kind tokens get an id), so there's no dictionary
-                // entry to seed and no lookup needed here at all.
+                // entry to seed and no lookup needed here at all. They're kept as three separate
+                // kinds rather than collapsed into one so the sentence structure still records
+                // which kana tokens are actual words - see [TokenKind.HIRAGANA].
                 TokenKind.KATAKANA -> out += SentenceToken(word = surface, kind = TokenKind.KATAKANA.code)
+                TokenKind.HIRAGANA -> out += SentenceToken(word = surface, kind = TokenKind.HIRAGANA.code)
                 TokenKind.PARTICLE -> out += SentenceToken(word = surface, kind = TokenKind.PARTICLE.code)
             }
         }
@@ -91,13 +94,23 @@ class JapaneseTokenizer(private val dictionaryRepository: DictionaryRepository) 
 }
 
 /**
+ * [classifyToken] for an already-tokenized Kuromoji [Token] - feeds it the token's part-of-speech
+ * levels 1 and 2, which is what lets a kana-written word (わかる) be told apart from a particle
+ * (が). Lives here rather than in BookText.kt so that file stays free of any tokenizer dependency.
+ */
+fun classifyToken(token: Token): TokenKind =
+    classifyToken(token.surface, token.partOfSpeechLevel1, token.partOfSpeechLevel2)
+
+/**
  * Extracts the Dictionary screen's search terms from already-tokenized Kuromoji [tokens]: one term
  * per trackable word - the same [classifyToken] rule [JapaneseTokenizer.tokenize] uses to decide
  * what counts as one - using each word's dictionary (base) form rather than however it happens to
  * be inflected in the text (見た -> 見る), so a pasted/typed sentence searches every word it
  * actually contains instead of being matched as one literal string. Katakana loanwords are kept
- * too, by their surface form (no dictionary base form applies to those). Particles, punctuation,
- * and hiragana/latin filler are skipped the same way they are on import.
+ * too, by their surface form (no dictionary base form applies to those), and so are kana-written
+ * content words ([TokenKind.HIRAGANA]) - 「きれいな花」 should search きれい as well as 花, and
+ * JMdict has entries for those kana headwords. Only real grammar - particles, auxiliaries,
+ * punctuation, dependent helpers - is skipped, the same way it is on import.
  *
  * Falls back to [fallbackTerm] (the untokenized text, trimmed) as the sole term if that leaves
  * nothing - e.g. an English meaning query, or otherwise kanji/katakana-free input - so plain
@@ -112,8 +125,9 @@ class JapaneseTokenizer(private val dictionaryRepository: DictionaryRepository) 
 fun extractSearchTerms(tokens: List<Token>, fallbackTerm: String): List<String> {
     val terms = LinkedHashSet<String>()
     for (tok in tokens) {
-        when (classifyToken(tok.surface)) {
+        when (classifyToken(tok)) {
             TokenKind.WORD -> terms += tok.baseForm?.takeIf { it != "*" } ?: tok.surface
+            TokenKind.HIRAGANA -> terms += tok.baseForm?.takeIf { it != "*" } ?: tok.surface
             TokenKind.KATAKANA -> terms += tok.surface
             TokenKind.PARTICLE -> {}
         }

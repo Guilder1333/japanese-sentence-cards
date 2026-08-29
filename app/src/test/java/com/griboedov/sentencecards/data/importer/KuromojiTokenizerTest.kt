@@ -1,6 +1,7 @@
 package com.griboedov.sentencecards.data.importer
 
 import com.atilika.kuromoji.ipadic.Tokenizer
+import com.griboedov.sentencecards.data.db.TokenKind
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -74,6 +75,36 @@ class KuromojiTokenizerTest {
         val terms = extractSearchTerms(tokenizer.tokenize("eat"), fallbackTerm = "eat")
 
         assertEquals(listOf("eat"), terms)
+    }
+
+    @Test
+    fun `classifyToken separates kana content words from grammar on real tokenizer output`() {
+        val tokenizer = Tokenizer.Builder().build()
+
+        val kinds = tokenizer.tokenize("ぼくはちょっとしらべてみたけれど、なにもわからなかった。")
+            .associate { it.surface to classifyToken(it) }
+
+        // Content words that happen to be written in kana.
+        assertEquals(TokenKind.HIRAGANA, kinds["ぼく"])    // 名詞/代名詞
+        assertEquals(TokenKind.HIRAGANA, kinds["ちょっと"]) // 副詞
+        assertEquals(TokenKind.HIRAGANA, kinds["しらべ"])  // 動詞/自立
+        assertEquals(TokenKind.HIRAGANA, kinds["わから"])  // 動詞/自立
+        // Actual grammar, in exactly the same script.
+        assertEquals(TokenKind.PARTICLE, kinds["は"])     // 助詞
+        assertEquals(TokenKind.PARTICLE, kinds["て"])     // 助詞
+        assertEquals(TokenKind.PARTICLE, kinds["た"])     // 助動詞
+        assertEquals(TokenKind.PARTICLE, kinds["み"])     // 動詞/非自立 - the みる of ～てみる
+        assertEquals(TokenKind.PARTICLE, kinds["。"])     // 記号
+    }
+
+    @Test
+    fun `extractSearchTerms keeps a kana-written content word by its dictionary form`() {
+        val tokenizer = Tokenizer.Builder().build()
+
+        // わからなかった -> わかる; が/なかっ/た are grammar and stay out.
+        val terms = extractSearchTerms(tokenizer.tokenize("わからなかった"), fallbackTerm = "わからなかった")
+
+        assertEquals(listOf("わかる"), terms)
     }
 
     @Test
