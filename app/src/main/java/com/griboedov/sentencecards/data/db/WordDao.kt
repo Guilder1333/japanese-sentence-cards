@@ -42,4 +42,27 @@ interface WordDao {
 
     @Query("SELECT COUNT(*) FROM words")
     suspend fun count(): Int
+
+    /**
+     * Every word the user has actually acted on - at least one of the four progress columns
+     * differs from its default - for [com.griboedov.sentencecards.data.backup.DriveBackupService]
+     * to export. See [WordProgress] for why only these four columns (not the rest of the row) are
+     * backed up.
+     */
+    @Query(
+        "SELECT id AS wordId, toLearn, forceFurigana, quizSuccess, quizFails FROM words " +
+            "WHERE toLearn = 1 OR forceFurigana = 1 OR quizSuccess != 0 OR quizFails != 0",
+    )
+    suspend fun getProgress(): List<WordProgress>
+
+    /**
+     * Applies one restored [WordProgress] entry by id, touching only these four columns - never
+     * inserts a new word row, so a [wordId] not present locally (not imported on this device yet)
+     * is silently a no-op. See [com.griboedov.sentencecards.data.backup.DriveBackupService.restore].
+     */
+    @Query(
+        "UPDATE words SET toLearn = :toLearn, forceFurigana = :forceFurigana, " +
+            "quizSuccess = :quizSuccess, quizFails = :quizFails WHERE id = :wordId",
+    )
+    suspend fun updateProgress(wordId: Long, toLearn: Boolean, forceFurigana: Boolean, quizSuccess: Int, quizFails: Int)
 }

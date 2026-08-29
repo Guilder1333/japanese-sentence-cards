@@ -105,6 +105,12 @@ dependencies {
 
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.9.0")
 
+    // Drive "app data" backup of review progress (see data/backup/) - play-services-auth for the
+    // Authorization API (an OAuth token scoped to drive.appdata, no full Google Sign-In needed),
+    // work-runtime-ktx to schedule the periodic background backup.
+    implementation("com.google.android.gms:play-services-auth:21.2.0")
+    implementation("androidx.work:work-runtime-ktx:2.10.0")
+
     // On-device Japanese morphological tokenizer for the plain-text book import path
     // (data/importer/BookImporter.kt) - pure Java/Kotlin, bundles the IPADIC dictionary, no
     // native code or network access needed. Mirrors what tools/import_book.py does offline with

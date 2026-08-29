@@ -2,6 +2,7 @@ package com.griboedov.sentencecards.data.db
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import kotlinx.serialization.Serializable
 
 /**
  * A stored flash card, matching the README's "Flash cards storage" fields.
@@ -24,7 +25,11 @@ import androidx.room.PrimaryKey
  * afterwards, the card returns to normal front/back review at the hard queue (marking it Learned
  * again later re-quizzes just what's left), and once [mainWordIds] is empty the card is
  * [learned] and [quizSucceeded].
+ *
+ * `@Serializable` (in addition to the `@Entity`) so a card can be written straight into a Drive
+ * backup - see [com.griboedov.sentencecards.data.backup.BackupSnapshot].
  */
+@Serializable
 @Entity(tableName = "cards")
 data class CardEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,

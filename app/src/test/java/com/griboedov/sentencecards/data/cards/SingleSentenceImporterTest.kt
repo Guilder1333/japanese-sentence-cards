@@ -9,6 +9,7 @@ import com.griboedov.sentencecards.data.db.SentenceWordCrossRef
 import com.griboedov.sentencecards.data.db.TokenKind
 import com.griboedov.sentencecards.data.db.WordDao
 import com.griboedov.sentencecards.data.db.WordEntity
+import com.griboedov.sentencecards.data.db.WordProgress
 import com.griboedov.sentencecards.data.importer.SentenceImporter
 import com.griboedov.sentencecards.data.importer.SentenceTokenizer
 import kotlinx.coroutines.flow.Flow
@@ -33,6 +34,13 @@ private class SsiFakeWordDao : WordDao {
     override suspend fun maxId(): Long? = byId.keys.maxOrNull()
     override suspend fun allIds(): List<Long> = byId.keys.toList()
     override suspend fun count(): Int = byId.size
+
+    override suspend fun getProgress(): List<WordProgress> = byId.values
+        .filter { it.toLearn || it.forceFurigana || it.quizSuccess != 0 || it.quizFails != 0 }
+        .map { WordProgress(it.id, it.toLearn, it.forceFurigana, it.quizSuccess, it.quizFails) }
+    override suspend fun updateProgress(wordId: Long, toLearn: Boolean, forceFurigana: Boolean, quizSuccess: Int, quizFails: Int) {
+        byId[wordId]?.let { byId[wordId] = it.copy(toLearn = toLearn, forceFurigana = forceFurigana, quizSuccess = quizSuccess, quizFails = quizFails) }
+    }
 }
 
 private class SsiFakeSentenceDao : SentenceDao {
@@ -65,6 +73,8 @@ private class SsiFakeCardDao : CardDao {
     override suspend fun count(): Int = cards.size
     override suspend fun cardsForSentences(sentenceIds: Collection<Long>): List<CardEntity> =
         cards.filter { it.sentenceId in sentenceIds }
+    override suspend fun getAll(): List<CardEntity> = cards.toList()
+    override suspend fun deleteAll() { cards.clear() }
 }
 
 /** [importAsCard] never calls the tokenizer - this is only here to satisfy the constructor. */

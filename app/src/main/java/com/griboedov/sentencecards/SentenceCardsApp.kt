@@ -2,6 +2,14 @@ package com.griboedov.sentencecards
 
 import android.app.Application
 import android.util.Log
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import com.griboedov.sentencecards.data.backup.DriveAuthManager
+import com.griboedov.sentencecards.data.backup.DriveBackupService
+import com.griboedov.sentencecards.data.backup.DriveBackupWorker
 import com.griboedov.sentencecards.data.cards.CardGenerator
 import com.griboedov.sentencecards.data.cards.SingleSentenceImporter
 import com.griboedov.sentencecards.data.db.AppDatabase
@@ -19,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.util.concurrent.TimeUnit
 
 /**
  * Simple manual-DI container: no DI framework, just plain constructor wiring, kept small enough
@@ -49,6 +58,10 @@ class SentenceCardsApp : Application() {
         private set
     lateinit var japaneseTokenizer: JapaneseTokenizer
         private set
+    lateinit var driveAuthManager: DriveAuthManager
+        private set
+    lateinit var driveBackupService: DriveBackupService
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -77,11 +90,25 @@ class SentenceCardsApp : Application() {
         japaneseTokenizer = JapaneseTokenizer(dictionaryRepository)
         bookImporter = BookImporter(database.wordDao(), japaneseTokenizer, importer)
         singleSentenceImporter = SingleSentenceImporter(database.wordDao(), database.cardDao(), japaneseTokenizer, importer, translator)
+        driveAuthManager = DriveAuthManager(this)
+        driveBackupService = DriveBackupService(database)
 
         appScope.launch {
             if (sentenceRepository.count() == 0) {
                 importer.importJson(SeedData.json)
             }
         }
+
+        // Time-based half of the Drive backup design (see DriveBackupWorker) - the other half is
+        // the Settings screen's manual "force sync" button. KEEP so re-enqueuing on every app
+        // start doesn't reset an already-scheduled run.
+        val backupRequest = PeriodicWorkRequestBuilder<DriveBackupWorker>(24, TimeUnit.HOURS)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "drive-backup",
+            ExistingPeriodicWorkPolicy.KEEP,
+            backupRequest,
+        )
     }
 }

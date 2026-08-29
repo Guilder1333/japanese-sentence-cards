@@ -11,11 +11,19 @@ interface CardDao {
     @Query("SELECT * FROM cards ORDER BY id")
     fun observeAll(): Flow<List<CardEntity>>
 
+    /** One-shot equivalent of [observeAll], for [com.griboedov.sentencecards.data.backup.DriveBackupService] to export the full set. */
+    @Query("SELECT * FROM cards ORDER BY id")
+    suspend fun getAll(): List<CardEntity>
+
     @Upsert
     suspend fun upsertAll(cards: List<CardEntity>)
 
     @Update
     suspend fun update(card: CardEntity)
+
+    /** Restore-from-backup replaces every card, since a backup always contains the full set - see [com.griboedov.sentencecards.data.backup.DriveBackupService.restore]. */
+    @Query("DELETE FROM cards")
+    suspend fun deleteAll()
 
     @Query("SELECT COUNT(*) FROM cards")
     suspend fun count(): Int

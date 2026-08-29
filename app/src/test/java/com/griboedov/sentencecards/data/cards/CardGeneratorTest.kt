@@ -9,6 +9,7 @@ import com.griboedov.sentencecards.data.db.SentenceToken
 import com.griboedov.sentencecards.data.db.SentenceWordCrossRef
 import com.griboedov.sentencecards.data.db.WordDao
 import com.griboedov.sentencecards.data.db.WordEntity
+import com.griboedov.sentencecards.data.db.WordProgress
 import com.griboedov.sentencecards.data.translation.Translator
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOf
@@ -68,6 +69,9 @@ private class FakeCardDao(initial: List<CardEntity> = emptyList()) : CardDao {
 
     override suspend fun cardsForSentences(sentenceIds: Collection<Long>): List<CardEntity> =
         cards.filter { it.sentenceId in sentenceIds }
+
+    override suspend fun getAll(): List<CardEntity> = cards.toList()
+    override suspend fun deleteAll() { cards.clear() }
 }
 
 private class FakeWordDao(words: List<WordEntity>) : WordDao {
@@ -83,6 +87,12 @@ private class FakeWordDao(words: List<WordEntity>) : WordDao {
     override suspend fun maxId(): Long? = byId.keys.maxOrNull()
     override suspend fun allIds(): List<Long> = byId.keys.toList()
     override suspend fun count(): Int = byId.size
+
+    override suspend fun getProgress(): List<WordProgress> = byId.values
+        .filter { it.toLearn || it.forceFurigana || it.quizSuccess != 0 || it.quizFails != 0 }
+        .map { WordProgress(it.id, it.toLearn, it.forceFurigana, it.quizSuccess, it.quizFails) }
+    override suspend fun updateProgress(wordId: Long, toLearn: Boolean, forceFurigana: Boolean, quizSuccess: Int, quizFails: Int) =
+        error("not needed")
 }
 
 private fun wordToken(id: Long) = SentenceToken(word = "w$id", kind = 1, id = id)

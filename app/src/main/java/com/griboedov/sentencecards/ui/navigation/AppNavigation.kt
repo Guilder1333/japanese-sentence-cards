@@ -6,6 +6,7 @@ import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.School
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,6 +35,7 @@ import com.griboedov.sentencecards.R
 import com.griboedov.sentencecards.ui.dictionary.DictionaryScreen
 import com.griboedov.sentencecards.ui.importsentences.ImportSentencesScreen
 import com.griboedov.sentencecards.ui.review.ReviewScreen
+import com.griboedov.sentencecards.ui.settings.SettingsScreen
 import com.griboedov.sentencecards.ui.words.WordBrowserScreen
 import kotlinx.coroutines.launch
 
@@ -44,9 +46,10 @@ private sealed class Destination(val route: String, val label: String, val icon:
     // the dictionary), as opposed to Dictionary, which browses the full bundled JMdict data.
     data object Words : Destination("words", "Words to learn", Icons.Filled.School)
     data object Dictionary : Destination("dictionary", "Dictionary", Icons.AutoMirrored.Filled.MenuBook)
+    data object Settings : Destination("settings", "Settings", Icons.Filled.Settings)
 }
 
-private val destinations = listOf(Destination.Review, Destination.Import, Destination.Words, Destination.Dictionary)
+private val destinations = listOf(Destination.Review, Destination.Import, Destination.Words, Destination.Dictionary, Destination.Settings)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -108,6 +111,7 @@ fun AppNavigation() {
                 composable(Destination.Import.route) { ImportSentencesScreen() }
                 composable(Destination.Words.route) { WordBrowserScreen() }
                 composable(Destination.Dictionary.route) { DictionaryScreen() }
+                composable(Destination.Settings.route) { SettingsScreen() }
             }
         }
     }
