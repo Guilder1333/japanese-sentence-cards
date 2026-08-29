@@ -35,10 +35,16 @@ sealed class BackupResult {
  * [backup] always deletes+recreates the file rather than PATCHing its content in place: the
  * JDK's [HttpURLConnection] doesn't reliably support the PATCH method Drive's update-content
  * endpoint expects, and this data is small enough that the extra round trip doesn't matter.
+ *
+ * [restore] also opportunistically backfills the local sentence pool's translations from the
+ * restored cards (which already carry their own) - see the loop at the end of [restore] - purely
+ * to avoid CardGenerator re-spending a DeepL call on a sentence this device already knows the
+ * translation for, once it's picked to back a card for another word.
  */
 class DriveBackupService(private val database: AppDatabase) {
     private val cardDao get() = database.cardDao()
     private val wordDao get() = database.wordDao()
+    private val sentenceDao get() = database.sentenceDao()
 
     suspend fun backup(accessToken: String): BackupResult = withContext(Dispatchers.IO) {
         try {
@@ -67,6 +73,15 @@ class DriveBackupService(private val database: AppDatabase) {
                 cardDao.upsertAll(snapshot.cards)
                 for (progress in snapshot.wordProgress) {
                     wordDao.updateProgress(progress.wordId, progress.toLearn, progress.forceFurigana, progress.quizSuccess, progress.quizFails)
+                }
+                // Cards already carry their own translation, but backfill the local sentence pool
+                // too (matched by text, not id) so CardGenerator.translateIfNeeded doesn't spend
+                // another DeepL call re-translating a sentence this restore already has the answer
+                // for, next time it's picked to back a card for a *different* word.
+                for (card in snapshot.cards) {
+                    if (card.translation.isBlank()) continue
+                    val sentence = sentenceDao.findByText(card.text) ?: continue
+                    sentenceDao.updateTranslationIfBlank(sentence.id, card.translation)
                 }
             }
             BackupResult.Success(snapshot.exportedAtEpochMillis)

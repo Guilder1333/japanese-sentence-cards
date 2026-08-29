@@ -32,6 +32,11 @@ private class FakeSentenceDao(sentences: List<SentenceEntity>, wordRefs: List<Se
     override suspend fun insertWordRefs(refs: List<SentenceWordCrossRef>) = error("not needed")
     override suspend fun sentenceIdsContaining(wordId: Long): List<Long> =
         refs.filter { it.wordId == wordId }.map { it.sentenceId }
+    override suspend fun findByText(text: String): SentenceEntity? = byId.values.find { it.text == text }
+    override suspend fun updateTranslationIfBlank(id: Long, translation: String) {
+        val sentence = byId[id] ?: return
+        if (sentence.translation.isBlank()) byId[id] = sentence.copy(translation = translation)
+    }
 }
 
 /** Records every sentence text it's asked to translate, and returns a fixed canned translation. */

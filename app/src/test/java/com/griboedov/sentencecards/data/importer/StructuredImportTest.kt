@@ -54,6 +54,11 @@ private class FakeSentenceDao : SentenceDao {
     override suspend fun insertWordRefs(refs: List<SentenceWordCrossRef>) { wordRefs += refs }
     override suspend fun sentenceIdsContaining(wordId: Long): List<Long> =
         wordRefs.filter { it.wordId == wordId }.map { it.sentenceId }
+    override suspend fun findByText(text: String): SentenceEntity? = byId.values.find { it.text == text }
+    override suspend fun updateTranslationIfBlank(id: Long, translation: String) {
+        val sentence = byId[id] ?: return
+        if (sentence.translation.isBlank()) byId[id] = sentence.copy(translation = translation)
+    }
 }
 
 class StructuredImportTest {
