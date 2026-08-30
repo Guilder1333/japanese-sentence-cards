@@ -25,12 +25,20 @@ private const val MAX_UNCLOSED_QUOTE_CHARS = 500
  * *inside* a quote (e.g. 彼は「ああ、そうだ。」と言った。) doesn't cut the sentence short - the
  * quote is just part of the sentence it's embedded in.
  *
+ * A blank line - i.e. two or more consecutive line breaks - is a paragraph break, and ends
+ * whatever sentence is still open even without a terminator. Plain-text books routinely leave the
+ * last line of a paragraph unpunctuated (a heading, a line of verse, a chapter title, a fragment of
+ * dialogue), and without this that line would be glued onto the first sentence of the next
+ * paragraph. Any run of blank lines counts once, so a double-spaced file doesn't emit empties.
+ *
  * OCR'd/digitized books sometimes drop a line's closing quote mark entirely, which would otherwise
  * leave depth stuck open and swallow every terminator for the rest of the book
  * (MAX_UNCLOSED_QUOTE_CHARS guards the worst case of that, but by then several real sentences have
  * already been merged together). As a targeted fix: if a line ends with depth still open and the
  * *next* non-blank line opens another bracket, assume the missing close happened right there at
- * the line boundary - a new quote starting strongly implies the previous one ended.
+ * the line boundary - a new quote starting strongly implies the previous one ended. A paragraph
+ * break is the stronger version of the same idea: a quote left open at the end of a paragraph is
+ * treated as closed there, so a single dropped bracket can't swallow the rest of the chapter.
  */
 fun splitSentences(text: String): List<String> {
     val lines = text.split("\n")
@@ -39,8 +47,18 @@ fun splitSentences(text: String): List<String> {
     var depth = 0
     var unclosedStart = 0
     for (i in lines.indices) {
-        if (i > 0) buf.append('\n')
         val line = lines[i]
+        if (line.isBlank()) {
+            // Paragraph break: flush whatever's accumulated, terminator or not, and give up on any
+            // quote still open - it can't run across a paragraph boundary.
+            if (buf.isNotEmpty()) {
+                out += buf.toString()
+                buf.setLength(0)
+            }
+            depth = 0
+            continue
+        }
+        if (buf.isNotEmpty()) buf.append('\n')
         for (ch in line) {
             buf.append(ch)
             if (ch in OPEN_BRACKETS) {

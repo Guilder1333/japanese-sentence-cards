@@ -153,20 +153,36 @@ def split_sentences(text: str) -> Iterator[str]:
     terminator *inside* a quote (e.g. 彼は「ああ、そうだ。」と言った。) doesn't cut the
     sentence short - the quote is just part of the sentence it's embedded in.
 
+    A blank line - i.e. two or more consecutive line breaks - is a paragraph break, and ends
+    whatever sentence is still open even without a terminator. Plain-text books routinely leave the
+    last line of a paragraph unpunctuated (a heading, a line of verse, a chapter title, a fragment
+    of dialogue), and without this that line would be glued onto the first sentence of the next
+    paragraph. Any run of blank lines counts once, so a double-spaced file doesn't emit empties.
+
     OCR'd/digitized books sometimes drop a line's closing quote mark entirely (see
     tools/example.txt), which would otherwise leave depth stuck open and swallow every terminator
     for the rest of the book (MAX_UNCLOSED_QUOTE_CHARS guards the worst case of that, but by then
     several real sentences have already been merged together). As a targeted fix: if a line ends
     with depth still open and the *next* non-blank line opens another bracket, assume the missing
     close happened right there at the line boundary - a new quote starting strongly implies the
-    previous one ended.
+    previous one ended. A paragraph break is the stronger version of the same idea: a quote left
+    open at the end of a paragraph is treated as closed there, so a single dropped bracket can't
+    swallow the rest of the chapter.
     """
     lines = text.split("\n")
     buf = []
     depth = 0
     unclosed_start = 0
     for i, line in enumerate(lines):
-        if i > 0:
+        if not line.strip():
+            # Paragraph break: flush whatever's accumulated, terminator or not, and give up on any
+            # quote still open - it can't run across a paragraph boundary.
+            if buf:
+                yield "".join(buf)
+                buf = []
+            depth = 0
+            continue
+        if buf:
             buf.append("\n")
         for ch in line:
             buf.append(ch)

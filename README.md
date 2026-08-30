@@ -257,6 +257,18 @@ In general sentence can be imported in two variants - plain text or already stru
 
 I have python script for making similar kind of flash cards for anki.
 
+Plain text is split into sentences at 。.！!？?, with two adjustments for how books are actually
+typeset (`splitSentences` in `data/importer/BookText.kt` and `split_sentences` in
+`tools/import_book.py` implement the same rules):
+
+- A terminator **inside** a 「」/『』 quote doesn't cut the sentence - the quote is part of the
+  sentence it's embedded in. A quote that runs for several sentences is instead broken into one
+  sentence per quoted sentence, and the surrounding narration dropped.
+- A **blank line** - two or more consecutive line breaks - is a paragraph break and ends the
+  sentence, terminator or not: headings, verse and unpunctuated fragments are common and would
+  otherwise be glued onto the next paragraph. A single line break is just a hard wrap and does not
+  split, since books wrap mid-sentence.
+
 ### Adding word to learn
 
 Whenever a word is marked to-learn, it should end up backed by (at most) 3 cards total - not 3 *new* cards regardless of what's already there. So first, existing cards are reused, and only the shortfall is filled with newly generated ones (see `data/cards/`):

@@ -24,6 +24,41 @@ class BookTextTest {
     }
 
     @Test
+    fun `a blank line ends the sentence even without a terminator`() {
+        // A chapter heading, a line of verse, an unpunctuated fragment - without the paragraph
+        // rule "第一章" would be glued onto the first sentence of the body text.
+        val sentences = splitSentences("第一章\n\n吾輩は猫である。")
+
+        assertEquals(listOf("第一章", "吾輩は猫である。"), sentences)
+    }
+
+    @Test
+    fun `a single line break does not end the sentence`() {
+        // Plain-text books hard-wrap mid-sentence; only a *blank* line is a paragraph break.
+        val sentences = splitSentences("これは長い\n文です。")
+
+        assertEquals(listOf("これは長い\n文です。"), sentences)
+    }
+
+    @Test
+    fun `a run of blank lines counts once and emits no empty sentences`() {
+        // Also covers leading/trailing blank lines and whitespace-only "blank" ones (a full-width
+        // space is what a lot of digitized books indent with).
+        val sentences = splitSentences("\n\n第一章\n\n\n　\n本文です。\n\n")
+
+        assertEquals(listOf("第一章", "本文です。"), sentences)
+    }
+
+    @Test
+    fun `an unclosed quote does not survive a paragraph break`() {
+        // The dropped 「 would otherwise keep depth open and swallow both of the next paragraph's
+        // terminators (MAX_UNCLOSED_QUOTE_CHARS is far away), merging three sentences into one.
+        val sentences = splitSentences("彼は「ああ、そうだ\n\n次の段落です。これも。")
+
+        assertEquals(listOf("彼は「ああ、そうだ", "次の段落です。", "これも。"), sentences)
+    }
+
+    @Test
     fun `treats a missing closing quote at a line boundary as closed, so later sentences aren't swallowed`() {
         // The first line's 「 never actually closes (simulating an OCR-dropped closing quote), but
         // the next line opens another one - assume the missing close happened right at the
