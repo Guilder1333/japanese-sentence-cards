@@ -129,14 +129,26 @@ private fun card(
 class CardGeneratorTest {
 
     @Test
+    fun `returns zero and creates nothing when no sentence contains the word`() = runBlocking {
+        val sentences = listOf(sentence(1, 200L))
+        val refs = listOf(SentenceWordCrossRef(sentenceId = 1L, wordId = 200L))
+        val cardDao = FakeCardDao()
+        val generator = CardGenerator(FakeSentenceDao(sentences, refs), cardDao, FakeWordDao(emptyList()))
+
+        assertEquals(0, generator.generateCardsForWord(100L))
+        assertTrue(cardDao.cards.isEmpty())
+    }
+
+    @Test
     fun `with no existing cards, generates up to 3 new cards for the word`() = runBlocking {
         val sentences = listOf(sentence(1, 100L), sentence(2, 100L), sentence(3, 100L), sentence(4, 100L))
         val refs = sentences.map { SentenceWordCrossRef(sentenceId = it.id, wordId = 100L) }
         val cardDao = FakeCardDao()
         val generator = CardGenerator(FakeSentenceDao(sentences, refs), cardDao, FakeWordDao(emptyList()))
 
-        generator.generateCardsForWord(100L)
+        val count = generator.generateCardsForWord(100L)
 
+        assertEquals(3, count)
         assertEquals(3, cardDao.cards.size)
         assertTrue(cardDao.cards.all { it.mainWordIds == listOf(100L) })
     }
@@ -149,9 +161,10 @@ class CardGeneratorTest {
         val cardDao = FakeCardDao(listOf(card(id = 1L, sentenceId = 1L, mainWordIds = listOf(200L))))
         val generator = CardGenerator(FakeSentenceDao(sentences, refs), cardDao, FakeWordDao(emptyList()))
 
-        generator.generateCardsForWord(100L)
+        val count = generator.generateCardsForWord(100L)
 
         // No new card spawned - the existing one is reused, now teaching both words.
+        assertEquals(1, count)
         assertEquals(1, cardDao.cards.size)
         assertEquals(listOf(200L, 100L), cardDao.cards.single().mainWordIds)
     }
@@ -179,9 +192,10 @@ class CardGeneratorTest {
         val cardDao = FakeCardDao(listOf(card(id = 1L, sentenceId = 1L, mainWordIds = listOf(200L))))
         val generator = CardGenerator(FakeSentenceDao(sentences, refs), cardDao, FakeWordDao(emptyList()))
 
-        generator.generateCardsForWord(100L)
+        val count = generator.generateCardsForWord(100L)
 
         // 1 reused + 2 new = 3 total covering the word; sentence 2 and 3 each got a fresh card.
+        assertEquals(3, count)
         assertEquals(3, cardDao.cards.size)
         assertEquals(listOf(200L, 100L), cardDao.cards.first { it.sentenceId == 1L }.mainWordIds)
         assertTrue(cardDao.cards.filter { it.sentenceId != 1L }.all { it.mainWordIds == listOf(100L) })

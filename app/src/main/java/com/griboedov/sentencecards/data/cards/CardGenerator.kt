@@ -35,27 +35,32 @@ class CardGenerator(
     private val wordDao: WordDao,
     private val translator: Translator = NoOpTranslator,
 ) {
-    suspend fun generateCardsForWord(wordId: Long, limit: Int = DEFAULT_LIMIT) {
+    /**
+     * Returns how many cards carry the word as a main word once done - reused ones plus brand-new
+     * ones - which is what the "N sentences added to cards" popup reports. Zero means the sentence
+     * pool has no sentence containing the word at all (or none that could be picked).
+     */
+    suspend fun generateCardsForWord(wordId: Long, limit: Int = DEFAULT_LIMIT): Int {
         val containingIds = sentenceDao.sentenceIdsContaining(wordId)
-        if (containingIds.isEmpty()) return
+        if (containingIds.isEmpty()) return 0
 
         val existingCards = cardDao.cardsForSentences(containingIds)
         reuseExistingCards(existingCards, wordId)
 
         // Only make up the shortfall with brand-new cards, so reused cards count towards the cap.
         val remaining = limit - existingCards.size
-        if (remaining <= 0) return
+        if (remaining <= 0) return existingCards.size
 
         val carriedSentenceIds = existingCards.mapTo(mutableSetOf()) { it.sentenceId }
         val eligibleIds = containingIds.filterNot { it in carriedSentenceIds }
-        if (eligibleIds.isEmpty()) return
+        if (eligibleIds.isEmpty()) return existingCards.size
 
         val candidates = sentenceDao.getByIds(eligibleIds)
         val neededWordIds = candidates.flatMapTo(mutableSetOf()) { it.structure.mapNotNull { token -> token.id } }
         val wordsById = wordDao.getByIds(neededWordIds.toList()).associateBy { it.id }
 
         val chosen = pickBestSentences(candidates, wordsById, remaining)
-        if (chosen.isEmpty()) return
+        if (chosen.isEmpty()) return existingCards.size
 
         cardDao.upsertAll(
             chosen.map { sentence ->
@@ -69,6 +74,7 @@ class CardGenerator(
                 )
             },
         )
+        return existingCards.size + chosen.size
     }
 
     /**

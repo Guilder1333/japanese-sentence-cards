@@ -70,7 +70,7 @@ class WordRepositoryTest {
 
         // The review screen's flick-left on a kana word: nothing in JMdict matched, so there's no
         // entry id to attach - the word should still become trackable rather than be dropped.
-        val id = repository(dao).addFromDictionary("わかる", dictionaryEntryId = null, status = WordStatusChoice.TO_LEARN)
+        val id = repository(dao).addFromDictionary("わかる", dictionaryEntryId = null, status = WordStatusChoice.TO_LEARN).id
 
         val stored = dao.getById(id)!!
         assertEquals("わかる", stored.word)
@@ -83,8 +83,8 @@ class WordRepositoryTest {
         val dao = FakeWordDao()
         val repo = repository(dao)
 
-        val first = repo.addFromDictionary("わかる", dictionaryEntryId = null, status = WordStatusChoice.TO_LEARN)
-        val second = repo.addFromDictionary("わかる", dictionaryEntryId = 1_234L, status = WordStatusChoice.KNOWN)
+        val first = repo.addFromDictionary("わかる", dictionaryEntryId = null, status = WordStatusChoice.TO_LEARN).id
+        val second = repo.addFromDictionary("わかる", dictionaryEntryId = 1_234L, status = WordStatusChoice.KNOWN).id
 
         // Same word text - matched by findByWord - so the second flick updates the row rather than
         // spawning a duplicate one with its own metrics.
@@ -101,5 +101,23 @@ class WordRepositoryTest {
         repository(dao).addFromDictionary("わかる", dictionaryEntryId = null, status = WordStatusChoice.TO_LEARN)
 
         assertEquals(1_358_280L, dao.getById(7)!!.dictionaryEntryId)
+    }
+
+    @Test
+    fun `addFromDictionary reports a card count only for to-learn`() = runBlocking {
+        val repo = repository(FakeWordDao())
+
+        // No sentence in the (empty) pool contains the word, so to-learn yields zero cards - the
+        // case the review/dictionary popup highlights in red.
+        assertEquals(0, repo.addFromDictionary("わかる", dictionaryEntryId = null, status = WordStatusChoice.TO_LEARN).cardCount)
+        assertNull(repo.addFromDictionary("わかる", dictionaryEntryId = null, status = WordStatusChoice.KNOWN).cardCount)
+    }
+
+    @Test
+    fun `setToLearn reports a card count only when turning to-learn on`() = runBlocking {
+        val repo = repository(FakeWordDao(listOf(WordEntity(id = 7, word = "猫"))))
+
+        assertEquals(0, repo.setToLearn(7, toLearn = true))
+        assertNull(repo.setToLearn(7, toLearn = false))
     }
 }

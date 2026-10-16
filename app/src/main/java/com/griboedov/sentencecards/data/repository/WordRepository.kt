@@ -13,6 +13,12 @@ enum class WordStatusChoice(val label: String) {
 }
 
 /**
+ * Result of [WordRepository.addFromDictionary]: the tracked word's id, plus how many cards now
+ * teach it when it was added as to-learn (null for any other status, which generates no cards).
+ */
+data class AddedWord(val id: Long, val cardCount: Int?)
+
+/**
  * Read/write access to the known-words/kanji table, plus the actions the word 4-direction menu
  * and word browser expose.
  *
@@ -32,18 +38,21 @@ class WordRepository(private val dao: WordDao, private val cardGenerator: CardGe
      * 4-direction menu: left - mark word for learning. Doesn't touch [WordEntity.forceFurigana] -
      * front furigana is a separate, explicit opt-in (see [forceFurigana]/[setForceFurigana]), not
      * bundled into "to learn".
+     *
+     * Returns how many cards now teach the word - see [CardGenerator.generateCardsForWord].
      */
-    suspend fun markToLearn(id: Long) {
+    suspend fun markToLearn(id: Long): Int {
         updateWord(id) { it.copy(toLearn = true) }
-        cardGenerator.generateCardsForWord(id)
+        return cardGenerator.generateCardsForWord(id)
     }
 
     /** 4-direction menu: down - force furigana back on, e.g. for an otherwise-known word you still want the help for. */
     suspend fun forceFurigana(id: Long) = updateWord(id) { it.copy(forceFurigana = true) }
 
-    suspend fun setToLearn(id: Long, toLearn: Boolean) {
+    /** Returns how many cards now teach the word when turning to-learn on, or null when turning it off. */
+    suspend fun setToLearn(id: Long, toLearn: Boolean): Int? {
         updateWord(id) { it.copy(toLearn = toLearn) }
-        if (toLearn) cardGenerator.generateCardsForWord(id)
+        return if (toLearn) cardGenerator.generateCardsForWord(id) else null
     }
 
     suspend fun setForceFurigana(id: Long, forced: Boolean) = updateWord(id) { it.copy(forceFurigana = forced) }
@@ -89,7 +98,7 @@ class WordRepository(private val dao: WordDao, private val cardGenerator: CardGe
      * should still be trackable rather than silently refused. A null never clears an entry id an
      * already-tracked word had resolved.
      */
-    suspend fun addFromDictionary(word: String, dictionaryEntryId: Long?, status: WordStatusChoice): Long {
+    suspend fun addFromDictionary(word: String, dictionaryEntryId: Long?, status: WordStatusChoice): AddedWord {
         val existing = dao.findByWord(word)
         val base = existing ?: WordEntity(id = (dao.maxId() ?: 0L) + 1, word = word, dictionaryEntryId = dictionaryEntryId)
         val entryId = dictionaryEntryId ?: base.dictionaryEntryId
@@ -99,8 +108,8 @@ class WordRepository(private val dao: WordDao, private val cardGenerator: CardGe
             WordStatusChoice.FORCE_FURIGANA -> base.copy(dictionaryEntryId = entryId, toLearn = false, forceFurigana = true)
         }
         if (existing != null) dao.update(updated) else dao.upsert(updated)
-        if (status == WordStatusChoice.TO_LEARN) cardGenerator.generateCardsForWord(updated.id)
-        return updated.id
+        val cardCount = if (status == WordStatusChoice.TO_LEARN) cardGenerator.generateCardsForWord(updated.id) else null
+        return AddedWord(updated.id, cardCount)
     }
 
     private suspend inline fun updateWord(id: Long, transform: (WordEntity) -> WordEntity) {

@@ -28,6 +28,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.griboedov.sentencecards.SentenceCardsApp
 import com.griboedov.sentencecards.data.db.QueueLevel
 import com.griboedov.sentencecards.data.queue.ReviewAction
+import com.griboedov.sentencecards.ui.common.FadingPopup
 import com.griboedov.sentencecards.ui.theme.BacklogPriority
 import com.griboedov.sentencecards.ui.theme.EasyPriority
 import com.griboedov.sentencecards.ui.theme.HighestPriority
@@ -44,6 +45,7 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
         },
     )
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val popup by viewModel.popup.collectAsStateWithLifecycle()
 
     DictionaryDialog(lookup = state.dictionaryLookup, onDismiss = viewModel::dismissDictionary)
 
@@ -96,6 +98,8 @@ fun ReviewScreen(modifier: Modifier = Modifier) {
                 }
             }
         }
+
+        FadingPopup(message = popup, onDismiss = viewModel::clearPopup, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 

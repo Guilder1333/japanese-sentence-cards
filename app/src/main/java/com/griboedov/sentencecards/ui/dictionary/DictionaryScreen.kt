@@ -1,6 +1,7 @@
 package com.griboedov.sentencecards.ui.dictionary
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -27,13 +28,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Snackbar
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -58,7 +57,7 @@ import com.griboedov.sentencecards.SentenceCardsApp
 import com.griboedov.sentencecards.data.dictionary.DictionaryEntry
 import com.griboedov.sentencecards.data.dictionary.KanjiEntry
 import com.griboedov.sentencecards.data.repository.WordStatusChoice
-import kotlinx.coroutines.delay
+import com.griboedov.sentencecards.ui.common.FadingPopup
 import kotlinx.coroutines.launch
 
 /**
@@ -79,81 +78,77 @@ fun DictionaryScreen(modifier: Modifier = Modifier) {
     val results by viewModel.results.collectAsStateWithLifecycle()
     val isSearching by viewModel.isSearching.collectAsStateWithLifecycle()
     val hasSearched by viewModel.hasSearched.collectAsStateWithLifecycle()
-    val message by viewModel.message.collectAsStateWithLifecycle()
+    val popup by viewModel.popup.collectAsStateWithLifecycle()
     val clipboard = LocalClipboard.current
     val coroutineScope = rememberCoroutineScope()
 
     var selectedEntry by remember { mutableStateOf<DictionaryEntry?>(null) }
 
-    Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = viewModel::onQueryChange,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Search kanji, reading, or meaning") },
-            trailingIcon = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    if (query.isNotEmpty()) {
-                        // Clearing also empties the results list, not just the text field.
-                        IconButton(onClick = viewModel::clearQuery) {
-                            Icon(Icons.Filled.Clear, contentDescription = "Clear")
-                        }
-                    } else {
-                        IconButton(onClick = {
-                            coroutineScope.launch {
-                                val text = clipboard.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString()
-                                // Pasting searches immediately, rather than waiting for a second tap.
-                                if (!text.isNullOrEmpty()) viewModel.pasteAndSearch(text)
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = viewModel::onQueryChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Search kanji, reading, or meaning") },
+                trailingIcon = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (query.isNotEmpty()) {
+                            // Clearing also empties the results list, not just the text field.
+                            IconButton(onClick = viewModel::clearQuery) {
+                                Icon(Icons.Filled.Clear, contentDescription = "Clear")
                             }
-                        }) {
-                            Icon(Icons.Filled.ContentPaste, contentDescription = "Paste and search")
+                        } else {
+                            IconButton(onClick = {
+                                coroutineScope.launch {
+                                    val text = clipboard.getClipEntry()?.clipData?.getItemAt(0)?.text?.toString()
+                                    // Pasting searches immediately, rather than waiting for a second tap.
+                                    if (!text.isNullOrEmpty()) viewModel.pasteAndSearch(text)
+                                }
+                            }) {
+                                Icon(Icons.Filled.ContentPaste, contentDescription = "Paste and search")
+                            }
+                        }
+                        IconButton(onClick = viewModel::search) {
+                            Icon(Icons.Filled.Search, contentDescription = "Search")
                         }
                     }
-                    IconButton(onClick = viewModel::search) {
-                        Icon(Icons.Filled.Search, contentDescription = "Search")
-                    }
-                }
-            },
-            singleLine = true,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { viewModel.search() }),
-        )
-
-        if (isSearching) {
-            Text(
-                "Searching...",
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.padding(top = 8.dp),
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                keyboardActions = KeyboardActions(onSearch = { viewModel.search() }),
             )
-        } else if (hasSearched) {
-            Text(
-                "${results.size} result(s)",
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
 
-        LazyColumn(
-            modifier = Modifier.padding(top = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 16.dp),
-        ) {
-            items(results, key = { it.kanji.orEmpty() + "|" + it.kana }) { entry ->
-                DictionaryResultRow(
-                    entry = entry,
-                    onAdd = { status -> viewModel.addWord(entry, status) },
-                    onClick = { selectedEntry = entry },
+            if (isSearching) {
+                Text(
+                    "Searching...",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+            } else if (hasSearched) {
+                Text(
+                    "${results.size} result(s)",
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.padding(top = 8.dp),
                 )
             }
-        }
 
-        message?.let { msg ->
-            Snackbar(modifier = Modifier.padding(top = 8.dp)) { Text(msg) }
-            LaunchedEffect(msg) {
-                delay(2_000)
-                viewModel.clearMessage()
+            LazyColumn(
+                modifier = Modifier.padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 16.dp),
+            ) {
+                items(results, key = { it.kanji.orEmpty() + "|" + it.kana }) { entry ->
+                    DictionaryResultRow(
+                        entry = entry,
+                        onAdd = { status -> viewModel.addWord(entry, status) },
+                        onClick = { selectedEntry = entry },
+                    )
+                }
             }
         }
+
+        FadingPopup(message = popup, onDismiss = viewModel::clearPopup, modifier = Modifier.align(Alignment.BottomCenter))
     }
 
     selectedEntry?.let { entry ->

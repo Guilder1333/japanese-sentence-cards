@@ -6,8 +6,12 @@ import com.griboedov.sentencecards.data.db.WordEntity
 import com.griboedov.sentencecards.data.dictionary.DictionaryEntry
 import com.griboedov.sentencecards.data.dictionary.DictionaryRepository
 import com.griboedov.sentencecards.data.repository.WordRepository
+import com.griboedov.sentencecards.ui.common.PopupMessage
+import com.griboedov.sentencecards.ui.common.cardsAddedMessage
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -30,8 +34,18 @@ class WordBrowserViewModel(
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    fun setToLearn(id: Long, toLearn: Boolean) {
-        viewModelScope.launch { wordRepository.setToLearn(id, toLearn) }
+    private val _popup = MutableStateFlow<PopupMessage?>(null)
+    val popup: StateFlow<PopupMessage?> = _popup.asStateFlow()
+
+    fun setToLearn(word: WordEntity, toLearn: Boolean) {
+        viewModelScope.launch {
+            val cardCount = wordRepository.setToLearn(word.id, toLearn) ?: return@launch
+            _popup.value = cardsAddedMessage(word.word, cardCount)
+        }
+    }
+
+    fun clearPopup() {
+        _popup.value = null
     }
 
     fun setForceFurigana(id: Long, forced: Boolean) {
