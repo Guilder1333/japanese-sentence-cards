@@ -1,6 +1,7 @@
 package com.griboedov.sentencecards.ui.words
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -36,6 +37,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.griboedov.sentencecards.SentenceCardsApp
 import com.griboedov.sentencecards.data.knowledge.KnowledgeLevel
 import com.griboedov.sentencecards.data.knowledge.knowledgeLevel
+import com.griboedov.sentencecards.ui.common.FadingPopup
 import com.griboedov.sentencecards.ui.theme.wordStatusColor
 import com.griboedov.sentencecards.ui.theme.BacklogPriority
 import com.griboedov.sentencecards.ui.theme.EasyPriority
@@ -51,6 +53,7 @@ fun WordBrowserScreen(modifier: Modifier = Modifier) {
         },
     )
     val rows by viewModel.rows.collectAsStateWithLifecycle()
+    val popup by viewModel.popup.collectAsStateWithLifecycle()
     var query by remember { mutableStateOf("") }
 
     val filtered = remember(rows, query) {
@@ -65,32 +68,36 @@ fun WordBrowserScreen(modifier: Modifier = Modifier) {
         }
     }
 
-    Column(modifier = modifier.fillMaxSize().padding(16.dp)) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text("Filter words") },
-            leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
-            singleLine = true,
-        )
-        Text(
-            text = "${filtered.size} of ${rows.size} words",
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(vertical = 8.dp),
-        )
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 16.dp),
-        ) {
-            items(filtered, key = { it.word.id }) { row ->
-                WordRowCard(
-                    row = row,
-                    onToLearnChange = { viewModel.setToLearn(row.word.id, it) },
-                    onForceFuriganaChange = { viewModel.setForceFurigana(row.word.id, it) },
-                )
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(modifier = Modifier.fillMaxSize().padding(16.dp)) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Filter words") },
+                leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+                singleLine = true,
+            )
+            Text(
+                text = "${filtered.size} of ${rows.size} words",
+                style = MaterialTheme.typography.labelMedium,
+                modifier = Modifier.padding(vertical = 8.dp),
+            )
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(bottom = 16.dp),
+            ) {
+                items(filtered, key = { it.word.id }) { row ->
+                    WordRowCard(
+                        row = row,
+                        onToLearnChange = { viewModel.setToLearn(row.word, it) },
+                        onForceFuriganaChange = { viewModel.setForceFurigana(row.word.id, it) },
+                    )
+                }
             }
         }
+
+        FadingPopup(message = popup, onDismiss = viewModel::clearPopup, modifier = Modifier.align(Alignment.BottomCenter))
     }
 }
 

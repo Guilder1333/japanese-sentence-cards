@@ -17,6 +17,8 @@ import com.griboedov.sentencecards.data.quiz.readingOptions
 import com.griboedov.sentencecards.data.repository.CardRepository
 import com.griboedov.sentencecards.data.repository.WordRepository
 import com.griboedov.sentencecards.data.repository.WordStatusChoice
+import com.griboedov.sentencecards.ui.common.PopupMessage
+import com.griboedov.sentencecards.ui.common.cardsAddedMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -94,6 +96,14 @@ class ReviewViewModel(
 
     private val _uiState = MutableStateFlow(ReviewUiState())
     val uiState: StateFlow<ReviewUiState> = _uiState.asStateFlow()
+
+    /**
+     * Kept out of [ReviewUiState] on purpose: [refresh] rebuilds that from scratch on every
+     * cards/words change - including the one marking a word to-learn itself triggers - which
+     * would wipe the popup straight away.
+     */
+    private val _popup = MutableStateFlow<PopupMessage?>(null)
+    val popup: StateFlow<PopupMessage?> = _popup.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -290,17 +300,25 @@ class ReviewViewModel(
     private fun setStatus(token: SentenceToken, status: WordStatusChoice) {
         val tracked = trackedWord(token)
         viewModelScope.launch {
-            when {
+            val cardCount = when {
                 tracked == null -> {
                     // An untracked kana word: resolve its dictionary entry (best effort - a word
                     // JMdict does not have is still worth tracking) and create the row.
                     val entryId = lookupEntries(token, token.baseText).firstOrNull()?.id
-                    wordRepository.addFromDictionary(token.baseText, entryId, status)
+                    wordRepository.addFromDictionary(token.baseText, entryId, status).cardCount
                 }
-                status == WordStatusChoice.KNOWN -> wordRepository.markKnown(tracked.id)
+                status == WordStatusChoice.KNOWN -> {
+                    wordRepository.markKnown(tracked.id)
+                    null
+                }
                 else -> wordRepository.markToLearn(tracked.id)
             }
+            if (cardCount != null) _popup.value = cardsAddedMessage(tracked?.word ?: token.baseText, cardCount)
         }
+    }
+
+    fun clearPopup() {
+        _popup.value = null
     }
 
     private fun lookupDictionary(token: SentenceToken) {

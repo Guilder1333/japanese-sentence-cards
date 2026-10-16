@@ -7,6 +7,8 @@ import com.griboedov.sentencecards.data.dictionary.DictionaryRepository
 import com.griboedov.sentencecards.data.importer.JapaneseTokenizer
 import com.griboedov.sentencecards.data.repository.WordRepository
 import com.griboedov.sentencecards.data.repository.WordStatusChoice
+import com.griboedov.sentencecards.ui.common.PopupMessage
+import com.griboedov.sentencecards.ui.common.cardsAddedMessage
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,8 +37,8 @@ class DictionaryScreenViewModel(
     private val _hasSearched = MutableStateFlow(false)
     val hasSearched: StateFlow<Boolean> = _hasSearched.asStateFlow()
 
-    private val _message = MutableStateFlow<String?>(null)
-    val message: StateFlow<String?> = _message.asStateFlow()
+    private val _popup = MutableStateFlow<PopupMessage?>(null)
+    val popup: StateFlow<PopupMessage?> = _popup.asStateFlow()
 
     fun onQueryChange(value: String) {
         _query.value = value
@@ -76,12 +78,13 @@ class DictionaryScreenViewModel(
     fun addWord(entry: DictionaryEntry, status: WordStatusChoice) {
         viewModelScope.launch {
             val word = entry.kanji ?: entry.kana
-            wordRepository.addFromDictionary(word, entry.id, status)
-            _message.value = "Added $word as ${status.label}"
+            val added = wordRepository.addFromDictionary(word, entry.id, status)
+            _popup.value = added.cardCount?.let { cardsAddedMessage(word, it) }
+                ?: PopupMessage("Added $word as ${status.label}")
         }
     }
 
-    fun clearMessage() {
-        _message.value = null
+    fun clearPopup() {
+        _popup.value = null
     }
 }
